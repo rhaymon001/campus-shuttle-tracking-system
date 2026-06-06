@@ -1,0 +1,7 @@
+# Ignore backend dependencies and configuration secrets at the root level
+/abu-shuttle-backend/node_modules/
+/abu-shuttle-backend/.env
+
+# Ignore future frontend dependencies and production distribution builds at the root level
+/campus-shuttle-frontend/node_modules/
+/campus-shuttle-frontend/dist/
