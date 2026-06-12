@@ -5,6 +5,7 @@ import cors from 'cors';
 import dotenv from 'dotenv';
 import connectDB from './config/dbConn.js';
 import authRoutes from './routes/auth/auth.routes.js';
+import corsOptions from './config/corsOptions.js';
 
 // Initialize environment variables configuration
 dotenv.config();
@@ -17,7 +18,7 @@ connectDB();
 const app = express();
 
 // Cross Origin Resource Sharing
-app.use(cors());
+app.use(cors(corsOptions));
 
 // Built-in middleware for json
 app.use(express.json());
