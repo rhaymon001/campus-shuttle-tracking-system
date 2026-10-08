@@ -1,0 +1,43 @@
+# Render Blueprint — deploys both services from this repo (see render.com/docs/blueprint-spec).
+# Secrets (sync: false) are prompted on first deploy and editable in each service's dashboard.
+#
+# 1. Create the backend web service + frontend static site from this file.
+# 2. Set MONGODB_URI, JWT_SECRET, ALLOWED_ORIGINS (backend env) and
+#    VITE_BACKEND_BASE_URL, VITE_SOCKET_BASE_URL (frontend env).
+# 3. On the frontend static site, enable SPA redirects:  /*  ->  /index.html
+#    (Render > Static Sites > Redirects) so deep links don't 404.
+
+services:
+  # Backend API + Socket.IO web service
+  - type: web
+    name: abu-shuttle-backend
+    runtime: node
+    rootDir: abu-shuttle-backend
+    buildCommand: npm install
+    startCommand: npm start
+    healthCheckPath: /
+    envVars:
+      - key: MONGODB_URI
+        sync: false
+      - key: JWT_SECRET
+        sync: false
+      - key: ALLOWED_ORIGINS
+        sync: false
+      - key: TERMINUS_DWELL_METERS
+        value: 60
+      - key: TERMINUS_DWELL_FIXES
+        value: 3
+      - key: RETURN_DEPART_METERS
+        value: 20
+
+  # Frontend static site (Vite build; API URLs are baked in at build time)
+  - type: static
+    name: abu-shuttle-frontend
+    rootDir: campus-shuttle-frontend
+    buildCommand: npm install && npm run build
+    publishPath: dist
+    envVars:
+      - key: VITE_BACKEND_BASE_URL
+        sync: false
+      - key: VITE_SOCKET_BASE_URL
+        sync: false

@@ -75,3 +75,20 @@ for the route an active trip runs on.
 - **Choice:** `computeEtaPerStop` now flags a stop `passed` when the remaining road distance is `<= 0` (was `< 0`). Every `server:eta_update` now also carries `lastPassedIndex` + `lastPassedStopName`; the student dashboard picker therefore never offers a 0-min "next stop" that is the stop the bus is *beside*, and the bus popup prints "Beside: {stop}".
 - **Why:** with a fix parked exactly on a stop, the old strict-`<0` rule left that stop "upcoming" at 0 min, so the dashboard's min-ETA readout oscillated between the current stop and the real next stop as fixes walked a stop dead-on. Inclusive semantics keep `lastPassedIndex` monotonic → no backward flicker, and extra bonus: auto-alight now frees a seat when the bus is AT a passenger's destination, not after it passes.
 - **Rejected:** patching only the frontend label to skip 0-min stops (would fix the readout but leave the alight sweep lagging one stop behind on the terminal fix and keep the semantics intentionally inconsistent).
+
+## 2026-10-08 — Hosting preparation (Render)
+
+### 12. CORS origins come from `ALLOWED_ORIGINS` (comma-separated) plus localhost defaults
+- **Choice:** `config/allowedOrigins.js` now merges `process.env.ALLOWED_ORIGINS` (trimmed, non-empty entries) with the two localhost dev origins, and both Express (`corsOptions`) and Socket.IO (`socket/index.js`) keep consuming the same array.
+- **Why:** one source of truth for both transports; localhost stays allowed out of the box, and the deployed frontend origin is injected per environment without a code change.
+- **Rejected:** hardcoding the deployed URL into the array (brittle across environments/instances); a per-transport env var (two knobs for the same concept).
+
+### 13. Deployment target is Render, driven by a committed `render.yaml` blueprint
+- **Choice:** backend deploys as a Render node **web service** (`npm install` / `npm start`) and the frontend as a Render **static site** (Vite build, `publishPath: dist`). Added `"start": "node server.js"` and `engines.node >= 18` to the backend. API URLs are baked into the frontend at build time via `VITE_BACKEND_BASE_URL` / `VITE_SOCKET_BASE_URL`.
+- **Why:** free tier, git-push deploys, blueprint keeps infrastructure in-repo and reviewable; `seed.js` stays out of every build/start step because it is destructive.
+- **Rejected:** Railway (fixes backend but still needs a separate static host); Docker-on-VPS (more moving parts than a free-tier need); wiring `seed` or `dev` into the start command (would wipe a production DB).
+
+### 14. Installable PWA app shell now, Web Push at the evaluation phase
+- **Choice:** added `public/manifest.webmanifest` + a minimal `public/sw.js` (network-first, cache-fallback, API and cross-origin requests never intercepted) registered from `main.js` only in production builds.
+- **Why:** instant-install/offline-shell is cheap and has no moving parts; letting the SW run in dev would break Vite HMR.
+- **Rejected:** shipping Web Push now (needs a VAPID key, a push subscription endpoint, and a rendering decision — explicitly deferred); a cache-first strategy for `/api/` traffic (would serve stale live trip/ETA data).

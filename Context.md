@@ -144,3 +144,28 @@ If you are continuing this system, prioritize the following features:
 ##  
 Trips flip direction automatically at the termini (see DECISIONS.md). The
 driver's only control is End Trip, which ends the shift and stops auto-flips.
+
+## 8. Hosting readiness (Render)
+
+The repo is prepared for a two-service Render deployment from `render.yaml`:
+
+* **Backend web service** (`abu-shuttle-backend/`): `npm start` (`node server.js`);
+  CORS origins are read from `ALLOWED_ORIGINS` (comma-separated) and drive both
+  Express and Socket.IO. Secrets never live in the repo — see
+  `abu-shuttle-backend/.env.example` for the full variable list (MongoDB Atlas
+  URI, JWT secret, ALLOWED_ORIGINS, terminus-dwell tuning).
+* **Frontend static site** (`campus-shuttle-frontend/`): Vite build → `dist`;
+  the backend URLs are baked in at build time via `VITE_BACKEND_BASE_URL` /
+  `VITE_SOCKET_BASE_URL` (see `campus-shuttle-frontend/.env.example`). Enable
+  **SPA redirects `/* → /index.html`** in the Render dashboard for deep links.
+* **PWA app shell:** `public/manifest.webmanifest` + `public/sw.js` (network-first
+  with cache fallback; API/cross-origin requests never intercepted). The service
+  worker registers in production builds only. Web Push is deferred to the final
+  evaluation phase.
+* **Order after first deploy:** the backend's Mongo URI and the frontend's
+  `VITE_*` URLs need the deployed instance URLs; deploy the backend first, then
+  the frontend, then put the frontend URL into the backend's `ALLOWED_ORIGINS`.
+
+`seed.js` is destructive (it wipes trips/schedules and reseeds routes), so it is
+**not** wired into any Render build or start step — run it only against a
+development database.

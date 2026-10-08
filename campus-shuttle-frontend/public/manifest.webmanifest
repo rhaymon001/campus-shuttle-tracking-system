@@ -1,0 +1,12 @@
+{
+  "name": "ABU Shuttle Tracker & Virtual Queue",
+  "short_name": "ABU Shuttle",
+  "description": "Live campus shuttle tracking and virtual queue boarding at ABU Zaria.",
+  "start_url": ".",
+  "display": "standalone",
+  "background_color": "#F4F3EF",
+  "theme_color": "#0D2137",
+  "icons": [
+    { "src": "/favicon.svg", "sizes": "any", "type": "image/svg+xml", "purpose": "any maskable" }
+  ]
+}
