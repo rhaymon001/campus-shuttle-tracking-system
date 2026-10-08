@@ -3,7 +3,7 @@
     <header class="mobile-header">
       <div class="brand">
         <Bus :size="20" class="brand-teal" />
-        <span class="brand-text">ABU SHUTTLE</span>
+        <span class="brand-text">ABU SHUTTLE · ADMIN</span>
       </div>
       <button @click="isMobileMenuOpen = !isMobileMenuOpen" class="menu-toggle-btn">
         <Menu v-if="!isMobileMenuOpen" :size="24" />
@@ -14,25 +14,30 @@
     <aside class="sidebar" :class="{ 'sidebar-open': isMobileMenuOpen }">
       <div class="sidebar-brand-desktop">
         <Bus :size="20" class="brand-teal" />
-        <span class="brand-text">ABU SHUTTLE</span>
+        <span class="brand-text">ABU SHUTTLE · ADMIN</span>
       </div>
 
       <nav class="nav-menu">
-        <div class="section-label">Main Portal</div>
-        
-        <router-link to="/dashboard" class="nav-item" exact-active-class="active" @click="closeMobileMenu">
-          <LayoutDashboard :size="16" />
-          <span>Live Tracking</span>
+        <div class="section-label">Operations Control</div>
+
+        <router-link to="/admin" class="nav-item" exact-active-class="active" @click="closeMobileMenu">
+          <Activity :size="16" />
+          <span>Active Trips</span>
         </router-link>
-        
-        <router-link to="/dashboard/routes" class="nav-item" active-class="active" @click="closeMobileMenu">
+
+        <router-link to="/admin/shuttles" class="nav-item" active-class="active" @click="closeMobileMenu">
+          <Bus :size="16" />
+          <span>Fleet</span>
+        </router-link>
+
+        <router-link to="/admin/routes" class="nav-item" active-class="active" @click="closeMobileMenu">
           <Route :size="16" />
-          <span>Shuttle Routes</span>
+          <span>Routes</span>
         </router-link>
-        
-        <router-link to="/dashboard/schedules" class="nav-item" active-class="active" @click="closeMobileMenu">
-          <Calendar :size="16" />
-          <span>Schedules</span>
+
+        <router-link to="/admin/drivers" class="nav-item" active-class="active" @click="closeMobileMenu">
+          <Users :size="16" />
+          <span>Drivers</span>
         </router-link>
 
         <div class="section-label" style="margin-top: 24px;">Account</div>
@@ -45,8 +50,8 @@
       <div class="user-profile-badge">
         <div class="avatar"><User :size="14" /></div>
         <div class="user-meta">
-          <p class="user-name">{{ authStore.user?.name || 'Student Portal' }}</p>
-          <p class="user-role-text">{{ authStore.user?.role || 'student' }}</p>
+          <p class="user-name">{{ authStore.user?.name || 'Administrator' }}</p>
+          <p class="user-role-text">{{ authStore.user?.role || 'admin' }}</p>
         </div>
       </div>
     </aside>
@@ -54,13 +59,6 @@
     <div v-if="isMobileMenuOpen" @click="isMobileMenuOpen = false" class="sidebar-overlay"></div>
 
     <main class="dashboard-content">
-      <section class="metrics-row">
-        <div class="stat-card"><span class="stat-label">ACTIVE SHUTTLES</span><p class="stat-value">14</p></div>
-        <div class="stat-card"><span class="stat-label">OPERATIONAL ROUTES</span><p class="stat-value">4</p></div>
-        <div class="stat-card"><span class="stat-label">AVG WAITING TIME</span><p class="stat-value">8m</p></div>
-        <div class="stat-card"><span class="stat-label">SYSTEM STATUS</span><p class="stat-value status-good">NOMINAL</p></div>
-      </section>
-
       <router-view />
     </main>
   </div>
@@ -69,8 +67,8 @@
 <script setup>
 import { ref } from 'vue';
 import { useRouter } from 'vue-router';
-import { Bus, LayoutDashboard, Route, Calendar, LogOut, User, Menu, X } from 'lucide-vue-next';
-import { useAuthStore } from '../stores/auth';
+import { Bus, Activity, Route, Users, LogOut, User, Menu, X } from 'lucide-vue-next';
+import { useAuthStore } from '../../stores/auth';
 
 const authStore = useAuthStore();
 const router = useRouter();
@@ -81,7 +79,6 @@ const handleLogout = () => { authStore.logout(); router.push('/login'); };
 </script>
 
 <style scoped>
-/* Keep all your original dashboard-wrapper, sidebar, mobile-header, and metric-row styling from DashboardView here */
 .dashboard-wrapper { display: flex; flex-direction: column; min-height: 100vh; width: 100vw; box-sizing: border-box; }
 .mobile-header { display: flex; align-items: center; justify-content: space-between; height: 56px; background: #0D2137; color: #FFFFFF; padding: 0 16px; box-sizing: border-box; border-bottom: 0.5px solid rgba(255, 255, 255, 0.1); position: sticky; top: 0; z-index: 100; }
 .brand { display: flex; align-items: center; gap: 8px; }
@@ -103,11 +100,6 @@ const handleLogout = () => { authStore.logout(); router.push('/login'); };
 .user-name { font-size: 13px; font-weight: 500; margin: 0; color: #FFFFFF; }
 .user-role-text { font-size: 11px; text-transform: uppercase; color: #5F5E5A; margin: 2px 0 0 0; }
 .dashboard-content { flex: 1; background: #F4F3EF; padding: 16px; box-sizing: border-box; display: flex; flex-direction: column; gap: 16px; overflow-y: auto; }
-.metrics-row { display: grid; grid-template-columns: repeat(2, 1fr); gap: 8px; }
-.stat-card { background: #FFFFFF; border: 0.5px solid rgba(0, 0, 0, 0.10); border-radius: 12px; padding: 12px; }
-.stat-label { font-size: 11px; font-weight: 500; text-transform: uppercase; color: #5F5E5A; }
-.stat-value { font-size: 18px; font-weight: 500; color: #1A1A18; margin: 2px 0 0 0; }
-.status-good { color: #3B6D11; }
 
 @media (min-width: 768px) {
   .dashboard-wrapper { flex-direction: row; }
@@ -115,8 +107,5 @@ const handleLogout = () => { authStore.logout(); router.push('/login'); };
   .sidebar { position: relative; transform: translateX(0); width: 240px; }
   .sidebar-brand-desktop { display: flex; align-items: center; gap: 8px; padding-bottom: 16px; border-bottom: 0.5px solid rgba(255, 255, 255, 0.15); margin-bottom: 24px; }
   .dashboard-content { padding: 24px; gap: 24px; }
-  .metrics-row { grid-template-columns: repeat(4, 1fr); gap: 12px; }
-  .stat-card { padding: 16px; }
-  .stat-value { font-size: 22px; }
 }
 </style>
