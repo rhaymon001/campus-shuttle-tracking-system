@@ -21,7 +21,7 @@
           
           <div class="frequency-row">
             <span class="muted">Dispatch Frequency:</span>
-            <span class="freq-value">Every {{ sched.frequencyMinutes }} mins</span>
+            <span class="freq-value">Every {{ sched.estimatedFrequencyMinutes }} mins</span>
           </div>
           
           <div class="days-pills">
