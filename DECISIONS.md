@@ -61,3 +61,10 @@ for the route an active trip runs on.
 - **Choice:** `seed.js` now (a) deletes `ScheduleSlot` rows whose `routeId` points at any route it is about to reseed, and (b) creates continuous `06:00–21:00` slots (every 15 min, Mon–Sat) for both directions of the seeded route pair.
 - **Why:** the seed is an explicit dev-reset utility that already deletes child rows (Reservations, Trips, Presence, Users, Shuttles) — schedule children leaking into the new world produced a permanently empty view. Seeding defaults gives the dashboard something real to render after every reset, including the active trip's route.
 - **Rejected:** leaving schedule creation/cleanup admin-only (no schedule survived a reseed, so the student view stayed broken); only fixing the frontend/API (hides the symptom, the data still rots).
+
+## 2026-10-08 — Terminus dwell gate fix (auto-turnaround unreachable)
+
+### 10. Dwell arms when the bus is on the last route stretch, not only just past the terminus
+- **Choice:** the layover dwell condition was `lastPassedIndex === terminusIndex`; it is now `lastPassedIndex >= terminusIndex - 1`.
+- **Why:** `computeEtaPerStop` marks a stop `passed` only when the remaining distance is strictly `< 0`. A fix that lands *exactly on* the terminus stop projects to `remaining === 0` → the terminus itself is "not passed" → `lastPassedIndex` stays at `terminusIndex - 1` → the dwell could **never** arm. The manual simulator pins fixes to stop coordinates, so every parking test hit this: the forward trip never ended and the return leg never started. The relaxed gate also covers real GPS that stops right on the shelter.
+- **Rejected:** weakening `atTerminus` (60 m radius is already tight — all other stops are ≥ 241 m away, so proximity alone is a sound "arrived" signal); changing ETA `passed` semantics to `<= 0` (would mark a mid-route stop passed at the same moment the bus arrives, breaking the alight/promote cascade).

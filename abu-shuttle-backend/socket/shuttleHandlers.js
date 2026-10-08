@@ -407,13 +407,19 @@ const registerShuttleHandlers = async (nsp, socket) => {
       // ── Terminus dwell → layover (auto-turnaround) ──
       // Detect arrival ONLY at the terminal stop (never an intermediate shelter):
       // the bus must sit within the dwell radius for TERMINUS_DWELL_FIXES accepted
-      // fixes AND have its last-passed index at the terminus. Moving away resets
+      // fixes AND be effectively at the end of the route. Moving away resets
       // the counter, so a bus that stops mid-loop never false-flips.
+      //
+      // lastPassedIndex deliberately tolerates terminusIndex - 1: a fix that is
+      // exactly ON the terminus stop projects to `remaining === 0`, which ETA
+      // semantics classify as NOT passed, so the raw == test could never arm a
+      // layover for a bus stopped dead on the shelter (the sim pins fixes to
+      // stop coordinates, so this was unreachable in tests).
       const terminusIndex = cached.stops.reduce((maxV, s) => Math.max(maxV, s.index), -1);
       const terminusStop = cached.stops.find((s) => s.index === terminusIndex);
       if (terminusStop) {
         const atTerminus = haversineMeters(lat, lng, terminusStop.lat, terminusStop.lng) <= TERMINUS_DWELL_METERS;
-        const dwell = atTerminus && lastPassedIndex === terminusIndex
+        const dwell = atTerminus && lastPassedIndex >= terminusIndex - 1
           ? (dwellTracking.get(tripKey) || 0) + 1
           : 0;
         dwellTracking.set(tripKey, dwell);
