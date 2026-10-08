@@ -39,7 +39,7 @@ const RETURN_DEPART_METERS = Number(process.env.RETURN_DEPART_METERS) || 20;
 // tripId -> consecutive accepted fixes spent within the terminus dwell radius.
 // userId-set guards keep concurrent pings from double-firing layover/return.
 const dwellTracking = new Map();
-const layoverInFlight = new Map();
+const layoverInFlight = new Set();
 const returnInFlight = new Set();
 
 // Ends the forward trip at a terminus and arms the reverse leg. Runs exactly
