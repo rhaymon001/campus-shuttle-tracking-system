@@ -181,6 +181,7 @@ const handleLayoverPing = async (socket, nsp, userId, lat, lng, now) => {
     lastBroadcastAt.set(String(returnTrip._id), now);
     const speedKmh = observeSpeed(returnTrip._id, lat, lng, now) ?? DEFAULT_SPEED_KMH;
     const etaPerStop = computeEtaPerStop(lat, lng, layover.stops, speedKmh, layover.roadSegments);
+    const lastPassedIndex = lastPassedStopIndexFromEta(etaPerStop);
     nsp.to(`route-${layover.routeId}`).emit('server:eta_update', {
       tripId: returnTrip._id,
       routeId: layover.routeId,
@@ -190,7 +191,11 @@ const handleLayoverPing = async (socket, nsp, userId, lat, lng, now) => {
       seatsTotal: shuttle.capacity,
       locationUpdatedAt: updatedAt,
       speedKmh: Math.round(speedKmh),
-      etaPerStop
+      etaPerStop,
+      lastPassedIndex,
+      lastPassedStopName: lastPassedIndex >= 0
+        ? (layover.stops.find((s) => s.index === lastPassedIndex)?.name || null)
+        : null
     });
   } catch (err) {
     console.error('Auto return-leg start failed:', err.message);
@@ -357,7 +362,11 @@ const registerShuttleHandlers = async (nsp, socket) => {
         seatsTotal: cached.seatsTotal,
         locationUpdatedAt: updatedAt,
         speedKmh: Math.round(speedKmh),
-        etaPerStop
+        etaPerStop,
+        lastPassedIndex,
+        lastPassedStopName: lastPassedIndex >= 0
+          ? (cached.stops.find((s) => s.index === lastPassedIndex)?.name || null)
+          : null
       });
 
       // Proximity check: on refresh cycles, alert students whose booked stop the

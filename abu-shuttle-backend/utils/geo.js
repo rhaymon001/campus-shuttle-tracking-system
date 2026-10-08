@@ -98,7 +98,11 @@ export const computeEtaPerStop = (lat, lng, stops = [], avgSpeedKmh = 20, roadSe
     }
 
     const remaining = cum[i] - roadPosition;
-    if (remaining < 0) {
+    // A stop is "passed" the moment the bus REACHES it (remaining === 0), not
+    // only after it drives past. This keeps lastPassedIndex monotonic so the
+    // "next stop" readout excludes the stop the bus is beside instead of
+    // oscillating between the current and the upcoming stop.
+    if (remaining <= 0) {
       return {
         index: stop.index,
         name: stop.name,
