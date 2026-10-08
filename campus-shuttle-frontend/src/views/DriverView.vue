@@ -353,6 +353,9 @@ const resumeOrSetup = async () => {
     }
 
     activeTrip.value = res.data;
+    // The return leg just went live while the layover card was up — clear it or
+    // the v-else-if="layoverData" branch keeps the verifier hidden.
+    layoverData.value = null;
     currentTripId.value = res.data._id;
     occupancy.value = res.data.seatsCurrentOccupancy;
     startGpsStream();
@@ -379,6 +382,7 @@ const handleStartTrip = async () => {
     // Re-fetch through the populated resume endpoint for consistent shape
     const res = await apiClient.get('/trips/driver/active');
     activeTrip.value = res.data;
+    layoverData.value = null;
     currentTripId.value = res.data._id;
     occupancy.value = res.data.seatsCurrentOccupancy;
     manualStopIndex.value = 0; // fresh trip begins at its first stop
