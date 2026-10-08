@@ -84,7 +84,7 @@
           <div v-if="manualMode" class="manual-sim-body">
             <div v-if="simStops.length" class="manual-stop-block">
               <label class="manual-label">Return-leg simulated stop</label>
-              <select v-model.number="manualStopIndex" class="manual-select">
+              <select v-model.number="manualStopIndex" class="manual-select" @change="selectSimStop">
                 <option v-for="(stop, i) in simStops" :key="stop.index" :value="i">
                   {{ i }}. {{ stop.name }}
                 </option>
@@ -141,7 +141,7 @@
           <div v-if="manualMode" class="manual-sim-body">
             <div v-if="simStops.length" class="manual-stop-block">
               <label class="manual-label">Current simulated stop</label>
-              <select v-model.number="manualStopIndex" class="manual-select">
+              <select v-model.number="manualStopIndex" class="manual-select" @change="selectSimStop">
                 <option v-for="(stop, i) in simStops" :key="stop.index" :value="i">
                   {{ i }}. {{ stop.name }}
                 </option>
@@ -344,6 +344,10 @@ const resumeOrSetup = async () => {
       layoverData.value = res.data;
       activeTrip.value = null;
       currentTripId.value = null;
+      // The forward leg ended at the terminus; the return route is re-indexed
+      // 0..n-1 so the sim must settle back at its stop 0 (the terminus), or the
+      // stale index would teleport the bus to the far end and skip the layover.
+      manualStopIndex.value = 0;
       startGpsStream(); // keep feeding fixes so departure auto-starts the return
       return;
     }
@@ -377,6 +381,7 @@ const handleStartTrip = async () => {
     activeTrip.value = res.data;
     currentTripId.value = res.data._id;
     occupancy.value = res.data.seatsCurrentOccupancy;
+    manualStopIndex.value = 0; // fresh trip begins at its first stop
     startGpsStream();
     startManifestPoll();
   } catch (err) {
@@ -516,6 +521,13 @@ const advanceManualStop = () => {
   if (stop) pushManualFix(stop.lat, stop.lng);
 };
 
+// Selecting a stop in the simulator dropdown pushes that fix immediately so the
+// bus visibly jumps, rather than waiting up to 3s for the next auto-ping.
+const selectSimStop = () => {
+  const stop = simStops.value[manualStopIndex.value];
+  if (stop) pushManualFix(stop.lat, stop.lng);
+};
+
 const toggleManualMode = () => {
   manualMode.value = !manualMode.value;
   if (manualMode.value) {
@@ -595,6 +607,9 @@ onMounted(() => {
   // leg arms itself server-side; this view just reflects the state.
   on('driver:layover', async () => {
     stopManifestPoll();
+    // New route context: park the sim back at the reverse leg's first stop so a
+    // stale forward-leg index can't auto-trigger the departure for us.
+    manualStopIndex.value = 0;
     try {
       const res = await apiClient.get('/trips/driver/active');
       if (res.data.layover) {
