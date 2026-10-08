@@ -49,3 +49,15 @@ system with a fully bidirectional loop and an automatic, departure-triggered tur
 - **Choice:** duplicate guard is a controller-level find (`status ∈ [pending, boarded]`) rather than a partial unique index, so existing dev rows are never orphaned by a migration.
 - **Why/expected:** old pending reservations without `stopIndex`/`destStopIndex` will block rebooking until cancelled — acceptable for dev data.
 - **Rejected:** a DB migration to backfill indexes (this is pre-release dev data, not prod).
+
+## 2026-10-08 — Seed lifecycle owns schedule slots (fix: empty Schedules view)
+
+After routes became directional pairs, reseeding wiped the `Route` collection while
+admin-created `ScheduleSlot` rows kept referencing the deleted ids. The API served them
+until the orphan guard hid them, leaving the student Schedules dashboard empty — even
+for the route an active trip runs on.
+
+### 9. Orphan schedule slots are cleaned at seed time, and default windows are seeded
+- **Choice:** `seed.js` now (a) deletes `ScheduleSlot` rows whose `routeId` points at any route it is about to reseed, and (b) creates continuous `06:00–21:00` slots (every 15 min, Mon–Sat) for both directions of the seeded route pair.
+- **Why:** the seed is an explicit dev-reset utility that already deletes child rows (Reservations, Trips, Presence, Users, Shuttles) — schedule children leaking into the new world produced a permanently empty view. Seeding defaults gives the dashboard something real to render after every reset, including the active trip's route.
+- **Rejected:** leaving schedule creation/cleanup admin-only (no schedule survived a reseed, so the student view stayed broken); only fixing the frontend/API (hides the symptom, the data still rots).

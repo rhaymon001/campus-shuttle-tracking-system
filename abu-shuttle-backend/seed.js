@@ -11,6 +11,7 @@ import Route from './models/Route.js';
 import Trip from './models/Trip.js';
 import Reservation from './models/Reservation.js';
 import Presence from './models/Presence.js';
+import ScheduleSlot from './models/ScheduleSlot.js';
 import { computeRoadProfile } from './utils/routing.js';
 
 const seed = async () => {
@@ -28,14 +29,17 @@ const seed = async () => {
     // Order matters: child documents (trips/reservations) reference the users and
     // routes we are about to delete, which would otherwise leave orphaned rows that
     // populate() into null and render as "Unassigned" in the UI.
+    const seededRoutes = await Route.find({ name: /Samaru|Kongo|Campus Loop|Shehu Idris/ });
+    const seededRouteIds = seededRoutes.map((r) => r._id);
     await Promise.all([
       Reservation.deleteMany({}),
       Trip.deleteMany({}),
       Presence.deleteMany({}),
+      ScheduleSlot.deleteMany({ routeId: { $in: seededRouteIds } }),
       User.deleteMany({ email: /admin@abu|driver@abu|@student/ }),
       DriverProfile.deleteMany({}),
       Shuttle.deleteMany({ plateNumber: /ABU-SHL/ }),
-      Route.deleteMany({ name: /Samaru|Kongo|Campus Loop|Shehu Idris/ }),
+      Route.deleteMany({ _id: { $in: seededRouteIds } }),
     ]);
     console.log('Cleaned previous seed data\n');
   };
@@ -192,6 +196,24 @@ const seed = async () => {
     return [forwardRoute, reverseRoute];
   };
 
+  // Operational windows so the student dashboard shows real timetables for both
+  // directions after every reseed (schedule slots previously survived route
+  // deletion as orgphans and were filtered out of the API).
+  const seedScheduleSlots = async (forwardRoute, reverseRoute) => {
+    const slotFor = (routeId) =>
+      ScheduleSlot.create({
+        routeId,
+        recurringDays: ['mon', 'tue', 'wed', 'thu', 'fri', 'sat'],
+        schedulingType: 'continuous',
+        startTime: '06:00',
+        endTime: '21:00',
+        departureTime: null,
+        estimatedFrequencyMinutes: 15,
+        isActive: true,
+      });
+    return Promise.all([slotFor(forwardRoute._id), slotFor(reverseRoute._id)]);
+  };
+
   // ── Execute ───────────────────────────────────────────────────────
   await cleanCollections();
 
@@ -213,9 +235,12 @@ const seed = async () => {
   const smallShuttle = await seedSmallShuttle();
   console.log(`Shuttle:   ${smallShuttle.plateNumber} (${smallShuttle.capacity} seat — waitlist test)`);
 
-  const [route] = await seedRoute();
+  const [route, reverseRoute] = await seedRoute();
   console.log(`Route:     ${route.name} (${route.stops.length} stops)`);
   console.log(`Reverse:   ${route.reverseId ? 'linked via reverseId' : 'missing'}`);
+
+  await seedScheduleSlots(route, reverseRoute);
+  console.log('Schedules: continuous 06:00-21:00 slots for both directions (every 15 min, Mon-Sat)');
 
   console.log('\n── Seed complete ──');
   console.log('\nUse these credentials to test:');
