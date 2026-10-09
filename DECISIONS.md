@@ -92,3 +92,10 @@ for the route an active trip runs on.
 - **Choice:** added `public/manifest.webmanifest` + a minimal `public/sw.js` (network-first, cache-fallback, API and cross-origin requests never intercepted) registered from `main.js` only in production builds.
 - **Why:** instant-install/offline-shell is cheap and has no moving parts; letting the SW run in dev would break Vite HMR.
 - **Rejected:** shipping Web Push now (needs a VAPID key, a push subscription endpoint, and a rendering decision — explicitly deferred); a cache-first strategy for `/api/` traffic (would serve stale live trip/ETA data).
+
+## 2026-10-08 — Already-alighted passengers can book again on the same trip
+
+### 15. The duplicate-pass guard ignores reservations whose passenger has alighted
+- **Choice:** `issueBoardingPass` duplicate check is now `{ userId, tripId, status: { $in: ['pending', 'boarded'] }, alighted: false }`. Auto-alight already prefers `$set: { alighted: true }` and never mutates `status`, so an alighted row was still `boarded` and blocked the student from rebooking on the same live trip (false "You already have an active boarding pass" 409). Seats are `alighted: true` rows are freed by the sweep, so allowing a new booking after alighting is capacity-safe.
+- **Why:** the alight sweep marks the ride finished via `alighted`; the guard's intent is "don't hold two live passes while onboard", not "never ride this trip again". The `{ tripId, status, alighted }` index already serves the widened query.
+- **Rejected:** changing status off `'boarded'` in the sweep (alighting → `'expired'` would conflate "pass timed out unused" with "journey completed", breaking manifest/cron semantics; any new enum value would ripple through `getTripManifest`, occupancy derivation, and reservation lifecycle).

@@ -15,13 +15,14 @@ export const issueBoardingPass = async (req, res) => {
     if (!trip || trip.status !== 'active') return res.status(404).json({ message: 'Active loop context not found' });
 
     // Duplicate guard — one active (pending or boarded) reservation per student
-    // per trip. Single enforcement point: no partial unique index, so legacy dev
-    // rows with unrelated statuses are never orphaned by a migration. Student must
-    // cancel the existing pass before rebooking.
+    // per trip, and only while the passenger is still onboard. An already-alighted
+    // passenger (auto-alight set alighted:true) may book again on the same trip;
+    // blocking on a finished ride produces false "active pass" errors.
     const dup = await Reservation.findOne({
       userId,
       tripId,
-      status: { $in: ['pending', 'boarded'] }
+      status: { $in: ['pending', 'boarded'] },
+      alighted: false
     }).select('status stopName destStopName waitlistPosition').lean();
     if (dup) {
       return res.status(409).json({
