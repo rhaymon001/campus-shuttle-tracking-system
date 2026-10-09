@@ -99,3 +99,10 @@ for the route an active trip runs on.
 - **Choice:** `issueBoardingPass` duplicate check is now `{ userId, tripId, status: { $in: ['pending', 'boarded'] }, alighted: false }`. Auto-alight already prefers `$set: { alighted: true }` and never mutates `status`, so an alighted row was still `boarded` and blocked the student from rebooking on the same live trip (false "You already have an active boarding pass" 409). Seats are `alighted: true` rows are freed by the sweep, so allowing a new booking after alighting is capacity-safe.
 - **Why:** the alight sweep marks the ride finished via `alighted`; the guard's intent is "don't hold two live passes while onboard", not "never ride this trip again". The `{ tripId, status, alighted }` index already serves the widened query.
 - **Rejected:** changing status off `'boarded'` in the sweep (alighting → `'expired'` would conflate "pass timed out unused" with "journey completed", breaking manifest/cron semantics; any new enum value would ripple through `getTripManifest`, occupancy derivation, and reservation lifecycle).
+
+## 2026-10-08 — Blueprint deploys backend only; static site is manual
+
+### 16. Render's blueprint spec cannot create static sites, so `render.yaml` declares only the web service
+- **Choice:** removed the `type: static` frontend service from `render.yaml` (Render rejected it with `unknown type "static"`). The backend is created via Blueprint; the frontend static site is created manually in the dashboard (root dir `campus-shuttle-frontend`, `npm install && npm run build`, publish dir `dist`, SPA rewrite `/* → /index.html`).
+- **Why:** blueprint service types are limited to `web`/`worker`/`cron`/`backgroundWorker`/`pyserver`; there is no static-site type. Keeping the blueprint backend-only with the frontend documented in Context.md §8 is the simplest supported shape.
+- **Rejected:** generating the frontend service some other programmatic way (no API/branch coverage on free tier worth the complexity); replacing the static host with a Node static server just to fit the blueprint (extra runtime, worse caching/CDN than Render's static offering).
