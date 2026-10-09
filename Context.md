@@ -147,17 +147,21 @@ driver's only control is End Trip, which ends the shift and stops auto-flips.
 
 ## 8. Hosting readiness (Render)
 
-The repo is prepared for a two-service Render deployment from `render.yaml`:
+The backend deploys from `render.yaml`; the frontend static site is created manually
+in the Render dashboard because **Render blueprints cannot declare static sites**
+(render.yaml supports web/worker/cron/backgroundWorker/pyserver types only):
 
-* **Backend web service** (`abu-shuttle-backend/`): `npm start` (`node server.js`);
-  CORS origins are read from `ALLOWED_ORIGINS` (comma-separated) and drive both
-  Express and Socket.IO. Secrets never live in the repo — see
-  `abu-shuttle-backend/.env.example` for the full variable list (MongoDB Atlas
-  URI, JWT secret, ALLOWED_ORIGINS, terminus-dwell tuning).
-* **Frontend static site** (`campus-shuttle-frontend/`): Vite build → `dist`;
-  the backend URLs are baked in at build time via `VITE_BACKEND_BASE_URL` /
-  `VITE_SOCKET_BASE_URL` (see `campus-shuttle-frontend/.env.example`). Enable
-  **SPA redirects `/* → /index.html`** in the Render dashboard for deep links.
+* **Backend web service** — deploy via Blueprint: New → Blueprint → this repo.
+  `npm start` (`node server.js`); CORS origins are read from `ALLOWED_ORIGINS`
+  (comma-separated) and drive both Express and Socket.IO. Secrets never live in
+  the repo — see `abu-shuttle-backend/.env.example` for the full variable list
+  (MongoDB Atlas URI, JWT secret, ALLOWED_ORIGINS, terminus-dwell tuning).
+* **Frontend static site** — create manually: New → Static Site → same repo,
+  root dir `campus-shuttle-frontend`, build command `npm install && npm run build`,
+  publish directory `dist`. Set `VITE_BACKEND_BASE_URL` and `VITE_SOCKET_BASE_URL`
+  (see `campus-shuttle-frontend/.env.example`), then Manual Deploy to rebuild after
+  changing them. Enable **SPA redirects `/*` → `/index.html`** (type: rewrite) for
+  deep links.
 * **PWA app shell:** `public/manifest.webmanifest` + `public/sw.js` (network-first
   with cache fallback; API/cross-origin requests never intercepted). The service
   worker registers in production builds only. Web Push is deferred to the final
