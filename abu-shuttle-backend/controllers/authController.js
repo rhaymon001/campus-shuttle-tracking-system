@@ -1,80 +1,53 @@
-import bcrypt from 'bcryptjs';
-import jwt from 'jsonwebtoken';
 import User from '../models/User.js';
+import DriverProfile from '../models/DriverProfile.js';
+import jwt from 'jsonwebtoken';
+import bcrypt from 'bcryptjs';
 
-// @desc    Self-registration for students only 
-export const registerStudent = async (expressReq, expressRes) => {
-    try {
-        const { name, email, password, studentId, phone } = expressReq.body;
+// @desc    Register a new student account (Self-registration)
+export const registerStudent = async (req, res) => {
+  try {
+    const { name, email, studentId, phone, password } = req.body;
 
-        let existingUser = await User.findOne({ email });
-        if (existingUser) {
-            return expressRes.status(400).json({ message: 'User already registered with this email.' });
-        }
+    const existingUser = await User.findOne({ email });
+    if (existingUser) return res.status(400).json({ message: 'Email already registered' });
 
-        const salt = await bcrypt.genSalt(10);
-        const passwordHash = await bcrypt.hash(password, salt);
+    const salt = await bcrypt.genSalt(10);
+    const passwordHash = await bcrypt.hash(password, salt);
 
-        const newStudent = new User({
-            name,
-            email,
-            passwordHash,
-            role: 'student',
-            studentId,
-            phone
-        });
+    await User.create({
+      name, email, studentId, phone, password: passwordHash, role: 'student'
+    });
 
-        await newStudent.save();
-        expressRes.status(201).json({ message: 'Student registration successful. You can now login.' });
-
-    } catch (err) {
-        console.error(err.message);
-        expressRes.status(500).send('Server Error during registration');
-    }
+    res.status(201).json({ message: 'Registration successful. Account active.' });
+  } catch (err) {
+    res.status(500).json({ message: 'Server error during student registry' });
+  }
 };
 
-// @desc    Authenticate user (All Roles) & return JWT token 
-export const loginUser = async (expressReq, expressRes) => {
-    try {
-        const { email, password } = expressReq.body;
+// @desc    Unified login portal for Students, Drivers, and Admins
+export const loginUser = async (req, res) => {
+  try {
+    const { email, password } = req.body;
 
-        const user = await User.findOne({ email });
-        if (!user || !user.isActive) {
-            return expressRes.status(400).json({ message: 'Invalid credentials or inactive account.' });
-        }
+    const user = await User.findOne({ email });
+    if (!user || !user.isActive) return res.status(401).json({ message: 'Invalid credentials or inactive account' });
 
-        const isMatch = await bcrypt.compare(password, user.passwordHash);
-        if (!isMatch) {
-            return expressRes.status(400).json({ message: 'Invalid credentials.' });
-        }
+    const isMatch = await bcrypt.compare(password, user.password);
+    if (!isMatch) return res.status(401).json({ message: 'Invalid credentials' });
+    // ✅ Match: Generate token with exactly 'id' and 'role' to fit your verifyJWT requirements
+    const token = jwt.sign(
+      { id: user._id, role: user.role }, 
+      process.env.JWT_SECRET, // ✅ Swapped to match your middleware verification secret
+      { expiresIn: '24h' }
+    );
 
-        const payload = {
-            user: {
-                id: user._id,
-                role: user.role
-            }
-        };
-
-        jwt.sign(
-            payload,
-            process.env.JWT_SECRET,
-            { expiresIn: '24h' },
-            (err, token) => {
-                if (err) throw err;
-                expressRes.json({
-                    token,
-                    user: {
-                        id: user._id,
-                        name: user.name,
-                        email: user.email,
-                        role: user.role
-                    }
-                });
-            }
-        );
-
-    } catch (err) {
-        console.error(err.message);
-        expressRes.status(500).send('Server Error during authentication login');
-    }
+    res.json({
+      token,
+      user: { id: user._id, name: user.name, role: user.role }
+    });
+  
+  } catch (err) {
+    console.log(err)
+    res.status(500).json({ message: 'Login server breakdown error' });
+  }
 };

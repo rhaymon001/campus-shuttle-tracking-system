@@ -1,5 +1,6 @@
 import { defineStore } from 'pinia';
 import apiClient from '../api/axios';
+import { disconnectSocket } from '../api/socket';
 
 export const useAuthStore = defineStore('auth', {
   state: () => ({
@@ -64,6 +65,7 @@ export const useAuthStore = defineStore('auth', {
       this.user = null;
       localStorage.removeItem('shuttle_token');
       localStorage.removeItem('shuttle_user');
+      disconnectSocket(); // Tear down any live telemetry channel tied to the old session
     }
   }
 });

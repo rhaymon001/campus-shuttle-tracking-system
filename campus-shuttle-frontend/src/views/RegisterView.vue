@@ -13,18 +13,17 @@ import RegisterForm from '../components/RegisterForm.vue';
 </script>
 
 <style scoped>
-.auth-page {
-  padding-top: 20px;
-}
+.auth-page { padding-top: 16px; }
 .auth-navigation {
   text-align: center;
   font-size: 14px;
-  margin-top: 15px;
+  color: #5F5E5A;
+  margin-top: 16px;
 }
 .auth-navigation a {
-  color: #3498db;
+  color: #1D9E75;
   text-decoration: none;
-  font-weight: 600;
+  font-weight: 500;
 }
 .auth-navigation a:hover {
   text-decoration: underline;

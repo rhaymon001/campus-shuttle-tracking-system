@@ -42,6 +42,7 @@ import * as yup from 'yup';
 import { Mail, Lock, AlertTriangle, Loader2 } from 'lucide-vue-next';
 import { useAuthStore } from '../stores/auth';
 import { useRouter } from 'vue-router';
+import { ROLE_HOME } from '../router';
 
 
 const router = useRouter();
@@ -62,8 +63,8 @@ const onSubmit = handleSubmit(async (values) => {
   serverError.value = '';
   try {
     const loggedInUser = await authStore.loginUser(values);
-    alert(`Success! Logged in as ${loggedInUser.name} (${loggedInUser.role})`);
-    router.push("/dashboard");
+    // Route each role to its dedicated workspace
+    router.push(ROLE_HOME[loggedInUser.role] || '/dashboard');
   } catch (err) {
     serverError.value = err || 'Authentication server unreachable.';
   }
