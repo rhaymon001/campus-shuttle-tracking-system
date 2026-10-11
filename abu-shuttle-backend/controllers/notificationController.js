@@ -1,5 +1,6 @@
 // controllers/notificationController.js — per-user notification feed endpoints
 import Notification from '../models/Notification.js';
+import PushSubscription from '../models/PushSubscription.js';
 import { serializeNotification } from '../services/notificationService.js';
 
 // @desc    Fetch the current user's notification feed (newest first)
@@ -75,5 +76,43 @@ export const deleteNotification = async (req, res) => {
     res.json({ message: 'Notification removed' });
   } catch (err) {
     res.status(500).json({ message: 'Failed to delete notification', error: err.message });
+  }
+};
+
+// @desc    Save the user's browser Push subscription (upsert on endpoint)
+// @route   POST /api/v1/notifications/push/subscribe
+export const subscribePush = async (req, res) => {
+  try {
+    const { endpoint, keys } = req.body;
+    if (!endpoint || !keys?.p256dh || !keys?.auth) {
+      return res.status(400).json({ message: 'A full subscription (endpoint, p256dh, auth) is required' });
+    }
+    const sub = await PushSubscription.findOneAndUpdate(
+      { endpoint },
+      {
+        userId: req.user.id,
+        endpoint,
+        p256dh: keys.p256dh,
+        auth: keys.auth,
+        userAgent: req.headers['user-agent'] || ''
+      },
+      { upsert: true, new: true, setDefaultsOnInsert: true }
+    );
+    res.status(201).json({ message: 'Push subscription saved', _id: sub._id });
+  } catch (err) {
+    res.status(500).json({ message: 'Failed to save push subscription', error: err.message });
+  }
+};
+
+// @desc    Remove the user's browser Push subscription
+// @route   DELETE /api/v1/notifications/push/subscribe
+export const unsubscribePush = async (req, res) => {
+  try {
+    const { endpoint } = req.body;
+    if (!endpoint) return res.status(400).json({ message: 'endpoint is required' });
+    await PushSubscription.deleteOne({ endpoint, userId: req.user.id });
+    res.json({ message: 'Push subscription removed' });
+  } catch (err) {
+    res.status(500).json({ message: 'Failed to remove push subscription', error: err.message });
   }
 };

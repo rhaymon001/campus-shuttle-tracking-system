@@ -6,6 +6,7 @@
 // instantly via `notification:new`.
 import Notification from '../models/Notification.js';
 import { getShuttleNsp } from '../socket/index.js';
+import { sendPushToUser } from './pushService.js';
 
 export const serializeNotification = (doc) => ({
   _id: doc._id,
@@ -31,6 +32,12 @@ export const createNotification = async ({ userId, type, title, body, data = {} 
   } catch (err) {
     console.warn('notification:new emit failed:', err.message);
   }
+
+  // Web Push to the same user's PWA subscriptions (OS-level toast when the tab
+  // is closed). Fire-and-forget; dead endpoints are pruned inside pushService.
+  sendPushToUser(userId, { title: doc.title, body: doc.body, data: doc.data }).catch((err) => {
+    console.warn('Web Push send failed:', err.message);
+  });
 
   return payload;
 };

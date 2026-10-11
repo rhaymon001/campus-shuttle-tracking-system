@@ -135,7 +135,7 @@ Equipped with request and response interceptors:
 ## 7. Next Steps for Implementation
 If you are continuing this system, prioritize the following features:
 1. **Reservation lifecycle hardening:** waitlist on full shuttle, cancellation flow, expiry cron job (doc Section D6/3f), proximity alerts (`server:shuttle_nearby`, 2-stop threshold).
-2. **Notifications module:** persistent `Notification` collection with TTL index + REST endpoints (doc Section D8).
+2. **Web Push:** implemented — VAPID env keys, `PushSubscription` collection, SW `push`/`notificationclick`, auto-subscribe on login (feed-only fallback when keys missing). Remaining polish: proximity alerts (`server:shuttle_nearby`, 2-stop threshold) and pre-booking against schedule slots.
 3. **Admin reports:** aggregation pipelines for trip completion, occupancy trends, peak stops (doc Section D9); `TripLog` GPS ping history with 7-day TTL.
 4. **Schedules integration:** pre-booking against `ScheduleSlot`s, auto-confirmation before departure.
 
@@ -164,8 +164,11 @@ in the Render dashboard because **Render blueprints cannot declare static sites*
   deep links.
 * **PWA app shell:** `public/manifest.webmanifest` + `public/sw.js` (network-first
   with cache fallback; API/cross-origin requests never intercepted). The service
-  worker registers in production builds only. Web Push is deferred to the final
-  evaluation phase.
+  worker registers in production builds only. **Web Push is implemented** — SW
+  handles `push`/`notificationclick`, and every in-app notification also fans out
+  as an OS toast via the backend's `PushSubscription` collection + VAPID keys
+  (see `abu-shuttle-backend/.env.example`). Missing VAPID keys degrade to
+  feed-only mode.
 * **Order after first deploy:** the backend's Mongo URI and the frontend's
   `VITE_*` URLs need the deployed instance URLs; deploy the backend first, then
   the frontend, then put the frontend URL into the backend's `ALLOWED_ORIGINS`.
