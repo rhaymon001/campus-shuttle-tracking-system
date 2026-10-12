@@ -10,7 +10,20 @@ const reservationSchema = new mongoose.Schema(
     tripId: {
       type: mongoose.Schema.Types.ObjectId,
       ref: 'Trip', // References the specific live or scheduled journey loop
-      required: true,
+      default: null, // Null while a scheduled pre-booking waits for its departure
+    },
+    // Route a scheduled pre-booking belongs to (no trip exists yet). Null for
+    // live bookings, which are already bound to a Trip.
+    routeId: {
+      type: mongoose.Schema.Types.ObjectId,
+      ref: 'Route',
+      default: null,
+    },
+    // Intended departure date-time chosen from a ScheduleSlot window. Used to
+    // auto-confirm the pre-booking into a boarding code once a bus goes live.
+    scheduledFor: {
+      type: Date,
+      default: null,
     },
     stopName: {
       type: String,
@@ -81,6 +94,11 @@ reservationSchema.index({ tripId: 1, status: 1 });
 
 // Alight-sweep + manifest lookups: "who is still onboard whose destination the bus has passed"
 reservationSchema.index({ tripId: 1, status: 1, alighted: 1 });
+
+// Scheduled pre-booking lookups: pending slots for a route waiting to be confirmed,
+// plus a student's own upcoming pre-bookings.
+reservationSchema.index({ routeId: 1, isScheduled: 1, status: 1, scheduledFor: 1 });
+reservationSchema.index({ userId: 1, isScheduled: 1, status: 1 });
 
 const Reservation = mongoose.model('Reservation', reservationSchema);
 

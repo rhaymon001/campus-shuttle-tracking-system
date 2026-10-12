@@ -4,6 +4,7 @@ import Route from '../models/Route.js';
 import { getShuttleNsp } from '../socket/index.js';
 import { promoteNextWaitlisted } from '../services/reservationQueue.js';
 import { createNotification } from '../services/notificationService.js';
+import { createScheduledBooking } from '../services/scheduleBooking.js';
 
 // @desc    Student checks into queue to receive an active boarding code pass
 export const issueBoardingPass = async (req, res) => {
@@ -229,5 +230,78 @@ export const cancelReservation = async (req, res) => {
   } catch (err) {
     console.error(err);
     res.status(500).json({ message: 'Failed to cancel reservation' });
+  }
+};
+
+// @desc    Student pre-books a seat on a future scheduled departure (no bus live yet)
+// @route   POST /api/v1/reservations/schedule
+export const scheduleReservation = async (req, res) => {
+  try {
+    const { scheduleSlotId, stopName, destStopName, scheduledFor } = req.body;
+
+    const booking = await createScheduledBooking({
+      userId: req.user.id,
+      scheduleSlotId,
+      stopName,
+      destStopName,
+      scheduledFor
+    });
+
+    await createNotification({
+      userId: req.user.id,
+      type: 'reservation',
+      title: 'Pre-booking confirmed',
+      body: `Seat reserved from ${booking.stopName} to ${booking.destStopName}. We'll send your boarding code once the bus goes live.`,
+      data: {
+        reservationId: String(booking._id),
+        stopName: booking.stopName,
+        destStopName: booking.destStopName,
+        scheduledFor: booking.scheduledFor
+      }
+    });
+
+    res.status(201).json({
+      message: 'Seat pre-booked. Your boarding code arrives once a bus goes live.',
+      _id: booking._id,
+      status: booking.status,
+      stopName: booking.stopName,
+      destStopName: booking.destStopName,
+      scheduledFor: booking.scheduledFor
+    });
+  } catch (err) {
+    if (err && err.status) {
+      return res.status(err.status).json({ message: err.message, reservationId: err.reservationId });
+    }
+    console.error(err);
+    res.status(500).json({ message: 'Failed to create scheduled pre-booking' });
+  }
+};
+
+// @desc    Student fetches their own upcoming scheduled pre-bookings
+// @route   GET /api/v1/reservations/scheduled
+export const getScheduledReservations = async (req, res) => {
+  try {
+    const bookings = await Reservation.find({
+      userId: req.user.id,
+      isScheduled: true,
+      status: { $in: ['pending', 'confirmed'] }
+    })
+      .populate('routeId', 'name direction')
+      .sort({ scheduledFor: 1 })
+      .lean();
+
+    res.json(bookings.map((b) => ({
+      _id: b._id,
+      routeName: b.routeId?.name || 'Unknown route',
+      stopName: b.stopName,
+      destStopName: b.destStopName,
+      scheduledFor: b.scheduledFor,
+      status: b.status,
+      confirmationCode: b.confirmationCode,
+      expiresAt: b.expiresAt
+    })));
+  } catch (err) {
+    console.error(err);
+    res.status(500).json({ message: 'Failed to fetch scheduled pre-bookings' });
   }
 };

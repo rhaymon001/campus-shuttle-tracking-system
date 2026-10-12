@@ -1,5 +1,5 @@
 import express from 'express';
-import { issueBoardingPass, confirmPassBoarding, cancelReservation, getReservationStatus } from '../controllers/reservationController.js';
+import { issueBoardingPass, confirmPassBoarding, cancelReservation, getReservationStatus, scheduleReservation, getScheduledReservations } from '../controllers/reservationController.js';
 import verifyJWT from '../middleware/verifyJWT.js';
 import verifyRole from '../middleware/verifyRoles.js';
 
@@ -7,6 +7,12 @@ const router = express.Router();
 
 // Students check into the virtual queue to get a code pass
 router.post('/issue', verifyJWT, verifyRole(['student', 'admin']), issueBoardingPass);
+
+// Students pre-book a seat on a future scheduled departure
+router.post('/schedule', verifyJWT, verifyRole(['student', 'admin']), scheduleReservation);
+
+// Students list their own upcoming pre-bookings (before the parameterized route)
+router.get('/scheduled', verifyJWT, verifyRole(['student', 'admin']), getScheduledReservations);
 
 // Students pull the server-side truth of their reservation (used on page reload)
 router.get('/:reservationId', verifyJWT, verifyRole(['student', 'admin']), getReservationStatus);

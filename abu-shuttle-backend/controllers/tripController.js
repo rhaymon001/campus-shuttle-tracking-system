@@ -6,6 +6,7 @@ import Reservation from "../models/Reservation.js";
 import { getShuttleNsp } from "../socket/index.js";
 import { computeEtaPerStop, lastPassedStopIndexFromEta } from "../utils/geo.js";
 import { observeSpeed, clearSpeed, DEFAULT_SPEED_KMH } from "../utils/speed.js";
+import { confirmScheduledBookings } from "../services/scheduleBooking.js";
 
 // Safe wrapper so a socket layer failure never breaks the REST response cycle
 const safeEmit = (room, event, payload) => {
@@ -51,6 +52,13 @@ export const startTrip = async (req, res) => {
       .populate('shuttleId', 'plateNumber model')
       .populate('routeId', 'name direction');
     safeEmit(`route-${routeId}`, 'trip:started', { trip: populatedTrip });
+
+    // Materialize any pre-bookings for this route whose departure is imminent
+    try {
+      await confirmScheduledBookings();
+    } catch (err) {
+      console.error('Scheduled pre-booking confirmation failed:', err.message);
+    }
 
     res.status(201).json({ message: 'Trip shift started successfully', trip: activeTrip });
   } catch (err) {
