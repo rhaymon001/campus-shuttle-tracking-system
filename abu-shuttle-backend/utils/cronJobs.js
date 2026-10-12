@@ -3,21 +3,31 @@ import Reservation from '../models/Reservation.js';
 import { getShuttleNsp } from '../socket/index.js';
 import { promoteNextWaitlisted } from '../services/reservationQueue.js';
 import { createNotification } from '../services/notificationService.js';
+import { confirmScheduledBookings, expireScheduledBookings } from '../services/scheduleBooking.js';
 
 const initCronJobs = () => {
   // Sweep expired reservations every 60 seconds
   cron.schedule('* * * * *', async () => {
     try {
       const now = new Date();
-      const expired = await Reservation.find({ status: 'pending', expiresAt: { $lte: now } });
-      if (expired.length === 0) return;
+      // Scheduled pre-bookings have their own confirm/lapse lifecycle below.
+      const expired = await Reservation.find({
+        status: 'pending',
+        isScheduled: { $ne: true },
+        expiresAt: { $lte: now }
+      });
+      if (expired.length === 0) {
+        await confirmScheduledBookings();
+        await expireScheduledBookings();
+        return;
+      }
 
       const ids = expired.map((r) => r._id);
       const userIds = [...new Set(expired.map((r) => String(r.userId)))];
 
       // Only non-waitlisted expired reservations free up a slot for promotion
       const activeExpiredTripIds = [
-        ...new Set(expired.filter((r) => !r.waitlistPosition).map((r) => String(r.tripId)))
+        ...new Set(expired.filter((r) => !r.waitlistPosition && r.tripId).map((r) => String(r.tripId)))
       ];
 
       await Reservation.updateMany(
@@ -55,6 +65,10 @@ const initCronJobs = () => {
       }
 
       console.log(`[Cron] Expired ${ids.length} reservation(s) for ${userIds.length} user(s)`);
+
+      // Scheduled pre-bookings: materialize passes for live buses, lapse the rest
+      await confirmScheduledBookings();
+      await expireScheduledBookings();
     } catch (err) {
       console.error('[Cron] Reservation expiry sweep error:', err.message);
     }
