@@ -4,7 +4,9 @@ import {
   getUnreadCount,
   markAllRead,
   markOneRead,
-  deleteNotification
+  deleteNotification,
+  subscribePush,
+  unsubscribePush
 } from '../controllers/notificationController.js';
 import verifyJWT from '../middleware/verifyJWT.js';
 
@@ -20,5 +22,9 @@ router.get('/unread-count', getUnreadCount);
 router.patch('/read-all', markAllRead);
 router.patch('/:id/read', markOneRead);
 router.delete('/:id', deleteNotification);
+
+// Web Push subscriptions
+router.post('/push/subscribe', subscribePush);
+router.delete('/push/subscribe', unsubscribePush);
 
 export default router;
