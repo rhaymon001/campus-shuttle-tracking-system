@@ -135,7 +135,7 @@ Equipped with request and response interceptors:
 ## 7. Next Steps for Implementation
 If you are continuing this system, prioritize the following features:
 1. **Reservation lifecycle hardening:** waitlist on full shuttle, cancellation flow, expiry cron job (doc Section D6/3f), proximity alerts (`server:shuttle_nearby`, 2-stop threshold).
-2. **Web Push:** implemented — VAPID env keys, `PushSubscription` collection, SW `push`/`notificationclick`, auto-subscribe on login (feed-only fallback when keys missing). Remaining polish: proximity alerts (`server:shuttle_nearby`, 2-stop threshold) and pre-booking against schedule slots.
+2. **Web Push:** implemented — VAPID env keys, `PushSubscription` collection, SW `push`/`notificationclick`, and a user-initiated opt-in via the notification bell (browsers suppress non-gesture permission prompts, so it is not automatic). Remaining polish: proximity alerts (`server:shuttle_nearby`, 2-stop threshold) and pre-booking against schedule slots.
 3. **Admin reports:** aggregation pipelines for trip completion, occupancy trends, peak stops (doc Section D9); `TripLog` GPS ping history with 7-day TTL.
 4. **Schedules integration:** pre-booking against `ScheduleSlot`s, auto-confirmation before departure.
 

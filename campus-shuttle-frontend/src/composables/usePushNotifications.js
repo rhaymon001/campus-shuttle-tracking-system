@@ -15,6 +15,8 @@ const isSupported = () =>
   'PushManager' in window &&
   window.isSecureContext;
 
+export { isSupported as pushSupported };
+
 // Best-effort: enables push when possible, otherwise resolves false without noise.
 export const enableWebPush = async () => {
   if (!isSupported()) return { ok: false, reason: 'unsupported' };

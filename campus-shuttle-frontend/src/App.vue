@@ -15,27 +15,7 @@
 </template>
 
 <script setup>
-import { watch } from 'vue';
 import NotificationBell from './components/NotificationBell.vue';
-import { useAuthStore } from './stores/auth';
-import { enableWebPush } from './composables/usePushNotifications';
-
-const authStore = useAuthStore();
-
-// Ask for Web Push once the user is signed in. Watch (not mount) so a fresh
-// login on an already-mounted SPA still triggers it, and guests never get asked.
-watch(
-  () => authStore.token,
-  async (token) => {
-    if (!token) return;
-    try {
-      await enableWebPush();
-    } catch (err) {
-      console.warn('Web Push setup skipped:', err);
-    }
-  },
-  { immediate: true }
-);
 </script>
 
 <style>
