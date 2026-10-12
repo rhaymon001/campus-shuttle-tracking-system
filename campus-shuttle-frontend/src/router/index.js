@@ -11,6 +11,7 @@ import AdminView from '../views/admin/AdminView.vue';
 import AdminTripsView from '../views/admin/AdminTripsView.vue';
 import AdminShuttlesView from '../views/admin/AdminShuttlesView.vue';
 import AdminRoutesView from '../views/admin/AdminRoutesView.vue';
+import AdminSchedulesView from '../views/admin/AdminSchedulesView.vue';
 import AdminDriversView from '../views/admin/AdminDriversView.vue';
 
 // Landing pad per role — used by the guard and the login redirect
@@ -84,6 +85,11 @@ const routes = [
         path: 'routes',
         name: 'AdminRoutes',
         component: AdminRoutesView
+      },
+      {
+        path: 'schedules',
+        name: 'AdminSchedules',
+        component: AdminSchedulesView
       },
       {
         path: 'drivers',
