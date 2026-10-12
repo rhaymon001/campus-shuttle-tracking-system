@@ -35,6 +35,11 @@
           <span>Routes</span>
         </router-link>
 
+        <router-link to="/admin/schedules" class="nav-item" active-class="active" @click="closeMobileMenu">
+          <CalendarClock :size="16" />
+          <span>Schedules</span>
+        </router-link>
+
         <router-link to="/admin/drivers" class="nav-item" active-class="active" @click="closeMobileMenu">
           <Users :size="16" />
           <span>Drivers</span>
@@ -67,7 +72,7 @@
 <script setup>
 import { ref } from 'vue';
 import { useRouter } from 'vue-router';
-import { Bus, Activity, Route, Users, LogOut, User, Menu, X } from 'lucide-vue-next';
+import { Bus, Activity, Route, CalendarClock, Users, LogOut, User, Menu, X } from 'lucide-vue-next';
 import { useAuthStore } from '../../stores/auth';
 
 const authStore = useAuthStore();
