@@ -9,7 +9,8 @@
       <div v-if="open" class="notif-panel" @click.stop>
         <div class="notif-head">
           <strong>Notifications</strong>
-          <button v-if="unreadCount > 0" class="mark-all" @click="markAllRead">Mark all read</button>
+          <button v-if="canOptInPush" class="mark-all" @click="requestPush">Enable notifications</button>
+          <button v-else-if="unreadCount > 0" class="mark-all" @click="markAllRead">Mark all read</button>
         </div>
 
         <div v-if="loading" class="notif-state">Loading…</div>
@@ -39,11 +40,12 @@
 </template>
 
 <script setup>
-import { ref, watch, onUnmounted } from 'vue';
+import { ref, computed, watch, onUnmounted } from 'vue';
 import { Bell } from 'lucide-vue-next';
 import apiClient from '../api/axios';
 import { connectSocket } from '../api/socket';
 import { useAuthStore } from '../stores/auth';
+import { enableWebPush, pushSupported } from '../composables/usePushNotifications';
 
 const authStore = useAuthStore();
 
@@ -51,6 +53,15 @@ const open = ref(false);
 const items = ref([]);
 const unreadCount = ref(0);
 const loading = ref(false);
+
+const pushPermission = ref(pushSupported() ? Notification.permission : 'unsupported');
+const canOptInPush = computed(() => pushPermission.value === 'default');
+
+const requestPush = async () => {
+  const result = await enableWebPush();
+  pushPermission.value = pushSupported() ? Notification.permission : 'unsupported';
+  if (!result.ok) console.warn('Web Push opt-in not completed:', result.reason);
+};
 
 let socket = null;
 let onNotificationNew = null;

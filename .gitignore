@@ -9,3 +9,8 @@
 
 # Secrets and credentials should never be committed
 *.env
+
+# Local tooling artifacts (opencode session dumps etc.)
+old-session.json
+*-session.json
+opencode-session*.json
