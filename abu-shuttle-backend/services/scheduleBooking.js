@@ -22,6 +22,7 @@ const CONFIRM_GRACE_MIN = 15;
 // Seat cap per route+departure while the bus stays unassigned. Mirrors the
 // largest campus Hiace; configurable for larger fleets.
 const CAPACITY = Number(process.env.SCHEDULE_BOOKING_CAPACITY ?? 14);
+console.log(`[Schedule] Pre-booking capacity set to ${CAPACITY} seats per departure`);
 
 const DAY_KEYS = ['sun', 'mon', 'tue', 'wed', 'thu', 'fri', 'sat'];
 const generateCode = () => Math.random().toString(36).substring(2, 8).toUpperCase();

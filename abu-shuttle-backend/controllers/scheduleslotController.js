@@ -7,7 +7,12 @@ import Route from '../models/Route.js';
  */
 export const getScheduleSlots = async (req, res) => {
   try {
-    let query = { isActive: true };
+    let query = {};
+
+    // Default to active schedule visibility unless the caller explicitly requests all slots.
+    if (req.query.includeInactive !== 'true' && req.query.all !== 'true') {
+      query.isActive = true;
+    }
 
     // Optional Filter: Filter by day of the week if passed as a query param (e.g., ?day=mon)
     if (req.query.day) {
