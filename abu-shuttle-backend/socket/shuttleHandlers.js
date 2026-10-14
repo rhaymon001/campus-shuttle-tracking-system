@@ -381,7 +381,7 @@ const registerShuttleHandlers = async (nsp, socket) => {
         }
 
         const activeReservations = await Reservation.find({
-          tripId: tripKey, status: 'pending', waitlistPosition: null
+          tripId: tripKey, status: { $in: ['pending', 'confirmed'] }, waitlistPosition: null
         }).lean();
 
         for (const res of activeReservations) {
@@ -394,7 +394,7 @@ const registerShuttleHandlers = async (nsp, socket) => {
           if (now - lastAlert < PROXIMITY_DEDUP_MS) continue;
           proximityNotifiedAt.set(resKey, now);
 
-          nsp.emit('server:shuttle_nearby', {
+          nsp.to(`user-${String(res.userId)}`).emit('server:shuttle_nearby', {
             userId: String(res.userId),
             reservationId: res._id,
             stopName: res.stopName,
@@ -480,8 +480,10 @@ const registerShuttleHandlers = async (nsp, socket) => {
       // Revoking sharing is a local-only state change — don't broadcast a fake 0,0 fix
       if (sharing !== true) return;
 
-      // Announce presence to every route feed so peers can render nearby markers
-      nsp.emit('server:presence_update', {
+      // Share opted-in presence only with clients subscribed to active route feeds.
+      const routeRooms = [...nsp.adapter.rooms.keys()].filter((room) => room.startsWith('route-'));
+      if (!routeRooms.length) return;
+      nsp.to(routeRooms).emit('server:presence_update', {
         userId: String(userId),
         name: doc.name,
         lat,

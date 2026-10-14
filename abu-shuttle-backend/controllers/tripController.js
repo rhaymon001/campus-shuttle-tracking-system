@@ -263,7 +263,7 @@ export const getTripManifest = async (req, res) => {
 
     const reservations = await Reservation.find({
       tripId: trip._id,
-      status: { $in: ['pending', 'boarded'] }
+      status: { $in: ['pending', 'confirmed', 'boarded'] }
     }).lean();
 
     const stops = [...(trip.routeId?.stops || [])].sort((a, b) => a.index - b.index);
@@ -271,7 +271,7 @@ export const getTripManifest = async (req, res) => {
       const entry = { index: s.index, name: s.name, pendingBoarding: 0, waitlisted: 0, dropoffs: 0 };
       for (const r of reservations) {
         if (r.waitlistPosition != null && r.stopName === s.name) entry.waitlisted += 1;
-        else if (r.status === 'pending' && r.stopName === s.name) entry.pendingBoarding += 1;
+        else if (['pending', 'confirmed'].includes(r.status) && r.stopName === s.name) entry.pendingBoarding += 1;
         else if (r.status === 'boarded' && !r.alighted && r.destStopName === s.name) entry.dropoffs += 1;
       }
       return entry;

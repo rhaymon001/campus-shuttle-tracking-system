@@ -1,0 +1,10 @@
+{
+  "apiBase": "http://localhost:3500/api/v1",
+  "socketUrl": "http://localhost:3500",
+  "driverToken": "REPLACE_WITH_TRIP_OWNING_DRIVER_JWT",
+  "otherDriverToken": "REPLACE_WITH_DIFFERENT_DRIVER_JWT",
+  "studentTokens": [
+    "REPLACE_WITH_DISTINCT_STUDENT_JWT_1",
+    "REPLACE_WITH_DISTINCT_STUDENT_JWT_2"
+  ]
+}
