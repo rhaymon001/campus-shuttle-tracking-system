@@ -8,6 +8,7 @@ import Reservation from '../models/Reservation.js';
 import Trip from '../models/Trip.js';
 import ScheduleSlot from '../models/ScheduleSlot.js';
 import { createNotification } from './notificationService.js';
+import { assignTripSeatSlot } from './seatAllocation.js';
 
 // Campus local time is WAT (UTC+1). Schedule windows ("06:00"–"21:00") are in
 // that zone, so time-of-day validation converts the chosen instant accordingly
@@ -97,34 +98,53 @@ export const createScheduledBooking = async ({ userId, scheduleSlotId, stopName,
     throw { status: 409, message: 'You already have a pre-booking for this departure.', reservationId: dup._id };
   }
 
-  const booked = await Reservation.countDocuments({
-    routeId,
-    scheduledFor: when,
-    isScheduled: true,
-    tripId: null,
-    status: 'pending'
-  });
-  if (booked >= CAPACITY) {
-    throw { status: 409, message: 'That departure is fully pre-booked. Try another time.' };
+  for (let attempt = 0; attempt < CAPACITY; attempt += 1) {
+    const existing = await Reservation.find({
+      routeId,
+      scheduledFor: when,
+      isScheduled: true,
+      status: { $in: ['pending', 'confirmed', 'boarded'] }
+    }).select('scheduledSeatSlot').lean();
+    const usedSlots = new Set(existing
+      .map(({ scheduledSeatSlot }) => scheduledSeatSlot)
+      .filter(Number.isInteger));
+    let legacySeats = existing.filter(({ scheduledSeatSlot }) => !Number.isInteger(scheduledSeatSlot)).length;
+    let candidate = null;
+    for (let seatSlot = 0; seatSlot < CAPACITY; seatSlot += 1) {
+      if (usedSlots.has(seatSlot)) continue;
+      if (legacySeats > 0) {
+        legacySeats -= 1;
+        continue;
+      }
+      candidate = seatSlot;
+      break;
+    }
+    if (candidate == null) {
+      throw { status: 409, message: 'That departure is fully pre-booked. Try another time.' };
+    }
+
+    try {
+      return await Reservation.create({
+        userId,
+        tripId: null,
+        routeId,
+        stopName,
+        stopIndex: boarding.index,
+        destStopName,
+        destStopIndex: dest.index,
+        isScheduled: true,
+        scheduleSlotId,
+        scheduledFor: when,
+        scheduledSeatSlot: candidate,
+        status: 'pending',
+        expiresAt: new Date(when.getTime() + CONFIRM_GRACE_MIN * 60 * 1000)
+      });
+    } catch (err) {
+      if (err.code !== 11000) throw err;
+    }
   }
 
-  const booking = await Reservation.create({
-    userId,
-    tripId: null,
-    routeId,
-    stopName,
-    stopIndex: boarding.index,
-    destStopName,
-    destStopIndex: dest.index,
-    isScheduled: true,
-    scheduleSlotId,
-    scheduledFor: when,
-    status: 'pending',
-    // Lapses if no bus confirms it by this point (auto-confirm runs every minute).
-    expiresAt: new Date(when.getTime() + CONFIRM_GRACE_MIN * 60 * 1000)
-  });
-
-  return booking;
+  throw { status: 409, message: 'That departure is fully pre-booked. Try another time.' };
 };
 
 // Materializes pending pre-bookings into real boarding passes once a bus goes
@@ -152,27 +172,34 @@ export const confirmScheduledBookings = async () => {
       tripId: null,
       routeId,
       scheduledFor: window
-    }).sort({ scheduledFor: 1 }).limit(trip.seatsTotal || CAPACITY);
+    }).sort({ scheduledFor: 1, createdAt: 1, _id: 1 });
 
     for (const booking of pending) {
       const code = generateCode();
-      booking.tripId = trip._id;
-      booking.confirmationCode = code;
-      booking.status = 'confirmed';
-      booking.expiresAt = new Date(Date.now() + 15 * 60 * 1000);
-      await booking.save();
+      const assigned = await assignTripSeatSlot(
+        booking._id,
+        trip._id,
+        trip.seatsTotal || CAPACITY,
+        {
+          confirmationCode: code,
+          status: 'confirmed',
+          expiresAt: new Date(Date.now() + 15 * 60 * 1000)
+        },
+        { tripId: null, isScheduled: true, scheduledFor: booking.scheduledFor }
+      );
+      if (!assigned) continue;
       confirmed += 1;
 
       await createNotification({
-        userId: booking.userId,
+        userId: assigned.userId,
         type: 'reservation',
         title: 'Your pre-booked boarding pass is ready',
-        body: `Your seat from ${booking.stopName} to ${booking.destStopName} is confirmed (${code}). Show it to the driver.`,
+        body: `Your seat from ${assigned.stopName} to ${assigned.destStopName} is confirmed (${code}). Show it to the driver.`,
         data: {
-          reservationId: String(booking._id),
+          reservationId: String(assigned._id),
           tripId: String(trip._id),
-          stopName: booking.stopName,
-          destStopName: booking.destStopName,
+          stopName: assigned.stopName,
+          destStopName: assigned.destStopName,
           code
         }
       });
@@ -185,22 +212,28 @@ export const confirmScheduledBookings = async () => {
 
 // Lapses pending pre-bookings whose departure passed with no matching bus.
 export const expireScheduledBookings = async () => {
-  const cutoff = new Date(Date.now() - CONFIRM_GRACE_MIN * 60 * 1000);
+  const now = new Date();
+  const cutoff = new Date(now.getTime() - CONFIRM_GRACE_MIN * 60 * 1000);
   const lapsed = await Reservation.find({
     isScheduled: true,
-    status: 'pending',
-    tripId: null,
-    scheduledFor: { $lte: cutoff }
+    status: { $in: ['pending', 'confirmed'] },
+    $or: [
+      { tripId: null, scheduledFor: { $lte: cutoff } },
+      { tripId: { $ne: null }, expiresAt: { $lte: now } }
+    ]
   });
 
   for (const booking of lapsed) {
     booking.status = 'expired';
     await booking.save();
+    const hadLivePass = Boolean(booking.tripId);
     await createNotification({
       userId: booking.userId,
       type: 'reservation',
-      title: 'Pre-booking lapsed',
-      body: `No bus ran for your ${booking.stopName} pre-booking. You can book another departure.`,
+      title: hadLivePass ? 'Scheduled boarding pass expired' : 'Pre-booking lapsed',
+      body: hadLivePass
+        ? `Your boarding pass for ${booking.stopName} expired before boarding. You can book another departure.`
+        : `No bus ran for your ${booking.stopName} pre-booking. You can book another departure.`,
       data: { reservationId: String(booking._id), stopName: booking.stopName }
     });
   }

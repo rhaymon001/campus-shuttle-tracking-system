@@ -4,8 +4,10 @@
 // boarding code" — previously duplicated verbatim in two files. Centralized here
 // with the promotion notification so the two paths can never drift apart.
 import Reservation from '../models/Reservation.js';
+import Trip from '../models/Trip.js';
 import { getShuttleNsp } from '../socket/index.js';
 import { createNotification } from './notificationService.js';
+import { assignTripSeatSlot } from './seatAllocation.js';
 
 // Promotes the next waitlisted passenger to an active boarding code.
 //
@@ -19,30 +21,38 @@ export const promoteNextWaitlisted = async (tripId, opts = {}) => {
   if (afterStopIndex != null) filter.stopIndex = { $gt: afterStopIndex };
 
   const next = await Reservation.findOne(filter)
-    .sort({ waitlistPosition: 1 });
+    .sort({ waitlistPosition: 1, createdAt: 1, _id: 1 });
   if (!next) return null;
+
+  const trip = await Trip.findOne({ _id: tripId, status: 'active' }).select('seatsTotal').lean();
+  if (!trip) return null;
 
   const code = Math.random().toString(36).substring(2, 8).toUpperCase();
   const expiryWindow = new Date(Date.now() + 15 * 60 * 1000);
-
-  next.confirmationCode = code;
-  next.expiresAt = expiryWindow;
-  next.waitlistPosition = null;
-  await next.save();
+  const promoted = await assignTripSeatSlot(
+    next._id,
+    tripId,
+    trip.seatsTotal,
+    { confirmationCode: code, expiresAt: expiryWindow, waitlistPosition: null },
+    { waitlistPosition: { $ne: null } }
+  );
+  if (!promoted) return null;
 
   const nsp = getShuttleNsp();
-  nsp.emit('waitlist:promoted', { userId: next.userId, reservationId: next._id, code, expiresAt: expiryWindow });
-
-  await createNotification({
-    userId: next.userId,
-    type: 'waitlist',
-    title: 'Seat unlocked — boarding code ready',
-    body: `A seat opened up on your ride from ${next.stopName}. Board with your 6-char code before it expires.`,
-    data: { reservationId: String(next._id), tripId: String(tripId), code, expiresAt: expiryWindow }
+  nsp.to(`user-${String(promoted.userId)}`).emit('waitlist:promoted', {
+    userId: String(promoted.userId), reservationId: promoted._id, code, expiresAt: expiryWindow
   });
 
-  console.log(`[Waitlist] Promoted reservation ${next._id} on trip ${tripId}`);
+  await createNotification({
+    userId: promoted.userId,
+    type: 'waitlist',
+    title: 'Seat unlocked — boarding code ready',
+    body: `A seat opened up on your ride from ${promoted.stopName}. Board with your 6-char code before it expires.`,
+    data: { reservationId: String(promoted._id), tripId: String(tripId), code, expiresAt: expiryWindow }
+  });
+
+  console.log(`[Waitlist] Promoted reservation ${promoted._id} on trip ${tripId}`);
 
   // Return the student's user id so callers can also emit targeted events if needed
-  return { userId: next.userId, reservation: next };
+  return { userId: promoted.userId, reservation: promoted };
 };

@@ -12,6 +12,10 @@ const reservationSchema = new mongoose.Schema(
       ref: 'Trip', // References the specific live or scheduled journey loop
       default: null, // Null while a scheduled pre-booking waits for its departure
     },
+    seatSlot: {
+      type: Number,
+      default: null,
+    },
     // Route a scheduled pre-booking belongs to (no trip exists yet). Null for
     // live bookings, which are already bound to a Trip.
     routeId: {
@@ -23,6 +27,10 @@ const reservationSchema = new mongoose.Schema(
     // auto-confirm the pre-booking into a boarding code once a bus goes live.
     scheduledFor: {
       type: Date,
+      default: null,
+    },
+    scheduledSeatSlot: {
+      type: Number,
       default: null,
     },
     stopName: {
@@ -99,6 +107,29 @@ reservationSchema.index({ tripId: 1, status: 1, alighted: 1 });
 // plus a student's own upcoming pre-bookings.
 reservationSchema.index({ routeId: 1, isScheduled: 1, status: 1, scheduledFor: 1 });
 reservationSchema.index({ userId: 1, isScheduled: 1, status: 1 });
+reservationSchema.index(
+  { tripId: 1, seatSlot: 1 },
+  {
+    unique: true,
+    partialFilterExpression: {
+      seatSlot: { $type: 'number' },
+      status: { $in: ['pending', 'confirmed', 'boarded'] },
+      alighted: false,
+      waitlistPosition: null
+    }
+  }
+);
+reservationSchema.index(
+  { routeId: 1, scheduledFor: 1, scheduledSeatSlot: 1 },
+  {
+    unique: true,
+    partialFilterExpression: {
+      isScheduled: true,
+      scheduledSeatSlot: { $type: 'number' },
+      status: { $in: ['pending', 'confirmed', 'boarded'] }
+    }
+  }
+);
 
 const Reservation = mongoose.model('Reservation', reservationSchema);
 

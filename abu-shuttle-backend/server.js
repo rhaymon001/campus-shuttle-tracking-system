@@ -9,6 +9,7 @@ import corsOptions from './config/corsOptions.js';
 import apiRouter from './routes/index.js';
 import { initSocket } from './socket/index.js';
 import initCronJobs from './utils/cronJobs.js';
+import Reservation from './models/Reservation.js';
 
 // Initialize environment variables configuration
 dotenv.config();
@@ -36,10 +37,16 @@ app.get('/', (req, res) => res.send('ABU Shuttle Tracking API Server is Active.'
 // Wrap Express in a raw HTTP server so Socket.IO can share the port
 const server = http.createServer(app);
 initSocket(server);
-initCronJobs();
 
 // Open connection confirmation rule
-mongoose.connection.once('open', () => {
+mongoose.connection.once('open', async () => {
     console.log('Connected to MongoDB');
-    server.listen(PORT, () => console.log(`Server is running on port ${PORT}`));
+    try {
+        await Reservation.createIndexes();
+        initCronJobs();
+        server.listen(PORT, () => console.log(`Server is running on port ${PORT}`));
+    } catch (error) {
+        console.error('Failed to ensure reservation indexes:', error.message);
+        process.exitCode = 1;
+    }
 });

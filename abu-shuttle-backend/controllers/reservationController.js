@@ -1,3 +1,4 @@
+import mongoose from 'mongoose';
 import Reservation from '../models/Reservation.js';
 import Trip from '../models/Trip.js';
 import Route from '../models/Route.js';
@@ -5,6 +6,7 @@ import { getShuttleNsp } from '../socket/index.js';
 import { promoteNextWaitlisted } from '../services/reservationQueue.js';
 import { createNotification } from '../services/notificationService.js';
 import { createScheduledBooking } from '../services/scheduleBooking.js';
+import { assignTripSeatSlot, createTripSeatReservation } from '../services/seatAllocation.js';
 
 // @desc    Student checks into queue to receive an active boarding code pass
 export const issueBoardingPass = async (req, res) => {
@@ -22,7 +24,7 @@ export const issueBoardingPass = async (req, res) => {
     const dup = await Reservation.findOne({
       userId,
       tripId,
-      status: { $in: ['pending', 'boarded'] },
+      status: { $in: ['pending', 'confirmed', 'boarded'] },
       alighted: false
     }).select('status stopName destStopName waitlistPosition').lean();
     if (dup) {
@@ -52,11 +54,6 @@ export const issueBoardingPass = async (req, res) => {
       return res.status(400).json({ message: 'Destination must be ahead of the boarding stop on this route.' });
     }
 
-    // Count current active (non-waitlisted) pending reservations + occupancy vs total capacity
-    const activePendingCount = await Reservation.countDocuments({ tripId, status: 'pending', waitlistPosition: null });
-    const slotsFilled = activePendingCount + trip.seatsCurrentOccupancy;
-    const isFull = slotsFilled >= trip.seatsTotal;
-
     // Generate unique short 6-character alphanumeric code
     const code = Math.random().toString(36).substring(2, 8).toUpperCase();
 
@@ -68,17 +65,32 @@ export const issueBoardingPass = async (req, res) => {
     // Count existing waitlisted positions for ordering
     const waitlistCount = await Reservation.countDocuments({ tripId, waitlistPosition: { $ne: null } });
 
-    const reservation = await Reservation.create({
+    let reservation = await createTripSeatReservation({
       userId,
       tripId,
       stopName,
       stopIndex: boardingStop.index,
       destStopName,
       destStopIndex: destStop.index,
-      confirmationCode: isFull ? null : code,
-      expiresAt: isFull ? waitlistExpiry : expiryWindow,
-      waitlistPosition: isFull ? waitlistCount + 1 : null
-    });
+      confirmationCode: code,
+      expiresAt: expiryWindow,
+      waitlistPosition: null
+    }, trip.seatsTotal);
+
+    const isFull = !reservation;
+    if (isFull) {
+      reservation = await Reservation.create({
+        userId,
+        tripId,
+        stopName,
+        stopIndex: boardingStop.index,
+        destStopName,
+        destStopIndex: destStop.index,
+        confirmationCode: null,
+        expiresAt: waitlistExpiry,
+        waitlistPosition: waitlistCount + 1
+      });
+    }
 
     if (isFull) {
       // Persist + push a waitlist confirmation so the student knows they're queued
@@ -124,43 +136,100 @@ export const issueBoardingPass = async (req, res) => {
 
 // @desc    Driver matches receipt manually, enters 6-char code, and accepts passenger boarding
 export const confirmPassBoarding = async (req, res) => {
+  let session;
   try {
     const { confirmationCode } = req.body;
+    if (!confirmationCode) return res.status(400).json({ message: 'A boarding code is required.' });
 
-    // 1. Locate validation ticket record
-    const pass = await Reservation.findOne({ confirmationCode, status: 'pending' });
-    if (!pass) return res.status(404).json({ message: 'Ticket pass code is invalid, processed, or expired' });
+    let outcome = null;
+    let boardedPass = null;
+    let updatedTrip = null;
+    session = await mongoose.startSession();
+    await session.withTransaction(async () => {
+      const pass = await Reservation.findOne({
+        confirmationCode,
+        status: { $in: ['pending', 'confirmed'] }
+      }).session(session);
+      if (!pass) {
+        outcome = 'invalid';
+        return;
+      }
 
-    if (new Date() > pass.expiresAt) {
-      pass.status = 'expired';
-      await pass.save();
-      return res.status(400).json({ message: 'This boarding token lifespan window has expired' });
+      const now = new Date();
+      if (pass.expiresAt <= now) {
+        pass.status = 'expired';
+        await pass.save({ session });
+        outcome = 'expired';
+        return;
+      }
+
+      const trip = await Trip.findOne({
+        _id: pass.tripId,
+        driverId: req.user.id,
+        status: 'active'
+      }).session(session);
+      if (!trip) {
+        outcome = 'wrong-trip';
+        return;
+      }
+
+      boardedPass = await Reservation.findOneAndUpdate(
+        { _id: pass._id, status: pass.status, expiresAt: { $gt: now } },
+        { $set: { status: 'boarded' } },
+        { new: true, session }
+      );
+      if (!boardedPass) {
+        outcome = 'invalid';
+        return;
+      }
+
+      updatedTrip = await Trip.findOneAndUpdate(
+        {
+          _id: trip._id,
+          driverId: req.user.id,
+          status: 'active',
+          $expr: { $lt: ['$seatsCurrentOccupancy', '$seatsTotal'] }
+        },
+        { $inc: { seatsCurrentOccupancy: 1 } },
+        { new: true, session }
+      );
+      if (!updatedTrip) {
+        const error = new Error('Bus is structurally full. Shift student to next arriving vehicle.');
+        error.code = 'SEAT_CAPACITY';
+        throw error;
+      }
+    });
+    await session.endSession();
+    session = null;
+
+    if (outcome === 'invalid') {
+      return res.status(404).json({ message: 'Ticket pass code is invalid or already processed.' });
     }
-
-    // 2. Fetch specific trip context tracking limits to avoid structural overloading
-    const trip = await Trip.findById(pass.tripId);
-    if (trip.seatsCurrentOccupancy >= trip.seatsTotal) {
-      return res.status(400).json({ message: 'Bus is structurally full. Shift student to next arriving vehicle.' });
+    if (outcome === 'expired') {
+      return res.status(400).json({ message: 'This boarding token lifespan window has expired.' });
     }
-
-    // 3. Lock ticket status change & increment vehicle payload registry metrics
-    pass.status = 'boarded';
-    await pass.save();
-
-    trip.seatsCurrentOccupancy += 1;
-    await trip.save();
+    if (outcome === 'wrong-trip') {
+      return res.status(403).json({ message: 'This boarding pass is not for your active trip.' });
+    }
+    if (!boardedPass || !updatedTrip) {
+      return res.status(409).json({ message: 'The boarding pass could not be confirmed.' });
+    }
 
     // Tell the enrolled student their place on board is confirmed
     await createNotification({
-      userId: pass.userId,
+      userId: boardedPass.userId,
       type: 'reservation',
       title: 'You are on board',
-      body: `Boarding confirmed from ${pass.stopName}. Enjoy the ride!`,
-      data: { reservationId: String(pass._id), tripId: String(pass.tripId), stopName: pass.stopName }
+      body: `Boarding confirmed from ${boardedPass.stopName}. Enjoy the ride!`,
+      data: { reservationId: String(boardedPass._id), tripId: String(boardedPass.tripId), stopName: boardedPass.stopName }
     });
 
-    res.json({ message: 'Payment receipt verified. Passenger authorized to board vehicle.', occupancy: trip.seatsCurrentOccupancy });
+    res.json({ message: 'Payment receipt verified. Passenger authorized to board vehicle.', occupancy: updatedTrip.seatsCurrentOccupancy });
   } catch (err) {
+    if (session) await session.endSession();
+    if (err.code === 'SEAT_CAPACITY') {
+      return res.status(400).json({ message: err.message });
+    }
     res.status(500).json({ message: 'Boarding confirmation pipeline failure' });
   }
 };
