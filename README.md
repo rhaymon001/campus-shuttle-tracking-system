@@ -127,7 +127,7 @@ Before starting the project, make sure you have:
 ### 1. Clone the repository
 
 ```bash
-git clone <your-repo-url>
+git clone https://github.com/rhaymon001/campus-shuttle-tracking-system.git
 cd campus_shuttle_tracking_system
 ```
 
