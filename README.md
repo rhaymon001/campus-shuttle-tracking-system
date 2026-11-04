@@ -184,17 +184,6 @@ Then open:
 - Frontend: http://127.0.0.1:3000
 - Backend API: http://127.0.0.1:5000
 
-## Seeded demo accounts
-
-For local development, the project includes seeded demo accounts in the backend:
-
-- Admin: `admin@abu.edu.ng` / `admin123`
-- Driver: `driver@abu.edu.ng` / `driver123`
-- Student: `student@abu.edu.ng` / `student123`
-- Student 2: `student2@abu.edu.ng` / `student123`
-
-> These are demo credentials for development and testing only. Do not use them in production.
-
 ## Available scripts
 
 ### Backend
