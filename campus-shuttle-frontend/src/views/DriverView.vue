@@ -18,6 +18,30 @@
     </div>
 
     <main class="terminal-content">
+      <section class="settings-panel">
+        <div class="panel-header-label">ACCOUNT SETTINGS</div>
+        <form class="password-form" @submit.prevent="handlePasswordChange">
+          <div class="field-group">
+            <label>Current password</label>
+            <input v-model="passwordForm.currentPassword" type="password" placeholder="Enter current password" />
+          </div>
+          <div class="field-group">
+            <label>New password</label>
+            <input v-model="passwordForm.newPassword" type="password" placeholder="Enter new password" />
+          </div>
+          <div class="field-group">
+            <label>Confirm password</label>
+            <input v-model="passwordForm.confirmPassword" type="password" placeholder="Confirm new password" />
+          </div>
+          <button class="btn btn-primary" type="submit" :disabled="changingPassword || !canSubmitPasswordForm">
+            {{ changingPassword ? 'Updating...' : 'Change Password' }}
+          </button>
+        </form>
+        <p v-if="passwordFeedback" :class="passwordFeedback.type === 'success' ? 'msg-success' : 'msg-error'">
+          {{ passwordFeedback.message }}
+        </p>
+      </section>
+
       <div v-if="loading" class="loading-state">Checking for an active shift loop...</div>
 
       <!-- ================= SETUP MODE ================= -->
@@ -233,7 +257,7 @@
 </template>
 
 <script setup>
-import { ref, computed, onMounted, onUnmounted } from 'vue';
+import { ref, computed, onMounted, onUnmounted, reactive } from 'vue';
 import { useRouter } from 'vue-router';
 import {
   Bus, LogOut, Play, Square, Satellite, Wifi, AlertTriangle, Loader2, X
@@ -274,6 +298,47 @@ const confirming = ref(false);
 const ending = ref(false);
 const endingLayover = ref(false);
 const broadcastAlert = ref('');
+const changingPassword = ref(false);
+const passwordFeedback = ref(null);
+const passwordForm = reactive({
+  currentPassword: '',
+  newPassword: '',
+  confirmPassword: ''
+});
+
+const canSubmitPasswordForm = computed(() => {
+  return passwordForm.currentPassword &&
+    passwordForm.newPassword &&
+    passwordForm.confirmPassword &&
+    passwordForm.newPassword.length >= 6 &&
+    passwordForm.newPassword === passwordForm.confirmPassword;
+});
+
+const handlePasswordChange = async () => {
+  if (!canSubmitPasswordForm.value) {
+    passwordFeedback.value = { type: 'error', message: 'Please complete all fields and make sure the new password matches.' };
+    return;
+  }
+
+  changingPassword.value = true;
+  passwordFeedback.value = null;
+
+  try {
+    const response = await authStore.changePassword({
+      currentPassword: passwordForm.currentPassword,
+      newPassword: passwordForm.newPassword
+    });
+
+    passwordFeedback.value = { type: 'success', message: response.message };
+    passwordForm.currentPassword = '';
+    passwordForm.newPassword = '';
+    passwordForm.confirmPassword = '';
+  } catch (err) {
+    passwordFeedback.value = { type: 'error', message: err || 'Failed to update your password.' };
+  } finally {
+    changingPassword.value = false;
+  }
+};
 
 // GPS streaming state
 const gpsStatus = ref('idle'); // idle | live | error
@@ -731,6 +796,15 @@ onUnmounted(() => {
 .chip-wait { background: #FFF9E6; color: #BA7517; }
 .chip-off { background: #E7ECF2; color: #33475B; }
 .count-none { color: #B9B7B0; }
+
+.settings-panel { background: #FFFFFF; border: 0.5px solid rgba(0, 0, 0, 0.10); border-radius: 12px; padding: 16px; box-sizing: border-box; }
+.panel-header-label { font-size: 11px; font-weight: 500; text-transform: uppercase; color: #5F5E5A; padding-bottom: 6px; border-bottom: 0.5px solid rgba(0, 0, 0, 0.1); margin-bottom: 12px; }
+.password-form { display: flex; flex-direction: column; gap: 12px; }
+.field-group { display: flex; flex-direction: column; gap: 6px; }
+.field-group label { font-size: 12px; font-weight: 500; text-transform: uppercase; color: #5F5E5A; }
+.field-group input { height: 38px; border: 0.5px solid rgba(0, 0, 0, 0.2); border-radius: 8px; padding: 0 12px; font-size: 14px; background: #F4F3EF; color: #1A1A18; box-sizing: border-box; }
+.msg-success { color: #0F6E56; font-size: 12px; margin-top: 8px; }
+.msg-error { color: #D9383A; font-size: 12px; margin-top: 8px; }
 
 @media (min-width: 768px) {
   .terminal-content { padding: 24px; gap: 20px; }

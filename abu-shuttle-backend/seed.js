@@ -4,6 +4,12 @@ import dotenv from 'dotenv';
 
 dotenv.config();
 
+const isProduction = process.env.NODE_ENV === 'production';
+if (isProduction && process.env.ALLOW_SEED_IN_PRODUCTION !== 'true') {
+  console.error('Seeding is disabled in production. Set ALLOW_SEED_IN_PRODUCTION=true only for a deliberate local override.');
+  process.exit(1);
+}
+
 import User from './models/User.js';
 import DriverProfile from './models/DriverProfile.js';
 import Shuttle from './models/Shuttle.js';

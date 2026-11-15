@@ -66,6 +66,11 @@ export const useAuthStore = defineStore('auth', {
       localStorage.removeItem('shuttle_token');
       localStorage.removeItem('shuttle_user');
       disconnectSocket(); // Tear down any live telemetry channel tied to the old session
+    },
+
+    async changePassword(passwordData) {
+      const response = await apiClient.put('/auth/change-password', passwordData);
+      return response.data;
     }
   }
 });

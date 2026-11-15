@@ -2,8 +2,15 @@
 import axios from 'axios'
 import { useAuthStore } from '../stores/auth.js' // Pinia store
 
-// Aligned to your server.js port (3500) and your master routing route namespace (/api/v1)
-const BASE_URL = import.meta.env.VITE_BACKEND_BASE_URL || 'http://localhost:3500/api/v1'
+const defaultLocalUrl = 'http://localhost:5000/api/v1'
+const defaultProductionUrl = 'https://campus-shuttle-tracking-system.onrender.com/api/v1'
+let BASE_URL
+
+if (import.meta.env.MODE === 'development') {
+  BASE_URL = defaultLocalUrl
+} else {
+  BASE_URL = import.meta.env.VITE_BACKEND_BASE_URL || defaultProductionUrl
+}
 
 const apiClient = axios.create({
   baseURL: BASE_URL,

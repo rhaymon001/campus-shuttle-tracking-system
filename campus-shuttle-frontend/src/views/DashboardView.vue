@@ -61,13 +61,37 @@
         <div class="stat-card"><span class="stat-label">SYSTEM STATUS</span><p class="stat-value status-good">NOMINAL</p></div>
       </section>
 
+      <section class="settings-panel">
+        <div class="panel-header-label">ACCOUNT SETTINGS</div>
+        <form class="password-form" @submit.prevent="handlePasswordChange">
+          <div class="field-group">
+            <label>Current password</label>
+            <input v-model="passwordForm.currentPassword" type="password" placeholder="Enter current password" />
+          </div>
+          <div class="field-group">
+            <label>New password</label>
+            <input v-model="passwordForm.newPassword" type="password" placeholder="Enter new password" />
+          </div>
+          <div class="field-group">
+            <label>Confirm password</label>
+            <input v-model="passwordForm.confirmPassword" type="password" placeholder="Confirm new password" />
+          </div>
+          <button class="btn btn-primary" type="submit" :disabled="changingPassword || !canSubmitPasswordForm">
+            {{ changingPassword ? 'Updating...' : 'Change Password' }}
+          </button>
+        </form>
+        <p v-if="passwordFeedback" :class="passwordFeedback.type === 'success' ? 'msg-success' : 'msg-error'">
+          {{ passwordFeedback.message }}
+        </p>
+      </section>
+
       <router-view />
     </main>
   </div>
 </template>
 
 <script setup>
-import { ref } from 'vue';
+import { computed, reactive, ref } from 'vue';
 import { useRouter } from 'vue-router';
 import { Bus, LayoutDashboard, Route, Calendar, LogOut, User, Menu, X } from 'lucide-vue-next';
 import { useAuthStore } from '../stores/auth';
@@ -75,9 +99,48 @@ import { useAuthStore } from '../stores/auth';
 const authStore = useAuthStore();
 const router = useRouter();
 const isMobileMenuOpen = ref(false);
+const changingPassword = ref(false);
+const passwordFeedback = ref(null);
+
+const passwordForm = reactive({
+  currentPassword: '',
+  newPassword: '',
+  confirmPassword: ''
+});
+
+const canSubmitPasswordForm = computed(() => {
+  return passwordForm.currentPassword && passwordForm.newPassword && passwordForm.confirmPassword &&
+    passwordForm.newPassword.length >= 6 && passwordForm.newPassword === passwordForm.confirmPassword;
+});
 
 const closeMobileMenu = () => { isMobileMenuOpen.value = false; };
 const handleLogout = () => { authStore.logout(); router.push('/login'); };
+
+const handlePasswordChange = async () => {
+  if (!canSubmitPasswordForm.value) {
+    passwordFeedback.value = { type: 'error', message: 'Please complete all fields and ensure the new password matches.' };
+    return;
+  }
+
+  changingPassword.value = true;
+  passwordFeedback.value = null;
+
+  try {
+    const response = await authStore.changePassword({
+      currentPassword: passwordForm.currentPassword,
+      newPassword: passwordForm.newPassword
+    });
+
+    passwordFeedback.value = { type: 'success', message: response.message };
+    passwordForm.currentPassword = '';
+    passwordForm.newPassword = '';
+    passwordForm.confirmPassword = '';
+  } catch (err) {
+    passwordFeedback.value = { type: 'error', message: err || 'Failed to update your password.' };
+  } finally {
+    changingPassword.value = false;
+  }
+};
 </script>
 
 <style scoped>
