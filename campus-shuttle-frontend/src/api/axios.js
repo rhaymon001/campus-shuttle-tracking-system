@@ -2,7 +2,9 @@
 import axios from 'axios'
 import { useAuthStore } from '../stores/auth.js' // Pinia store
 
-const defaultLocalUrl = 'http://localhost:5000/api/v1'
+// Dev: use a same-origin path. Vite proxies /api to the backend (see vite.config.js), so this works from
+// localhost, a phone, or a dev tunnel. A hard-coded http://localhost:5000 breaks on any other device.
+const defaultLocalUrl = '/api/v1'
 const defaultProductionUrl = 'https://campus-shuttle-tracking-system.onrender.com/api/v1'
 let BASE_URL
 
@@ -48,7 +50,9 @@ apiClient.interceptors.response.use(
     const status = error.response.status
 
     // Aligned with your verifyJWT middleware which sends 401 for expired or missing tokens
-    if (status === 401) {
+    // Bad credentials on login/register also return 401. That is not an expired session: let the form show the message.
+    const isAuthAttempt = /\/auth\/(login|register)/.test(error.config?.url || '')
+    if (status === 401 && !isAuthAttempt) {
       try {
         console.warn('Session or token has expired. Booting user to login.')
         

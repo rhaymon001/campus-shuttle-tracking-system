@@ -134,3 +134,53 @@ for the route an active trip runs on.
 - **Why:** count-then-create permits concurrent overbooking; scheduled passes must enter the ordinary boarding lifecycle; and personal boarding/proximity data must not be visible to unrelated connected clients.
 - **Rejected:** process-local mutexes (they fail across multiple server instances); relying on Mongoose's production-disabled automatic index creation; broadcast payloads filtered only in the frontend (clients can inspect every socket event).
 - **Trade-off:** boarding transactions require a MongoDB replica set or sharded cluster; the configured Atlas deployment supports transactions. Existing legacy reservations without seat slots are included in capacity calculations until they expire or complete.
+## 2026-11-17 - Frontend rebrand to "motatrack" (student screens)
+
+- **Choice:** visual-layer rebuild of the student experience (login, register, dashboard shell, live map, routes, schedules, notification bell) under the name **motatrack**. Design tokens live in `src/styles/tokens.css` (ABU-green and white in light mode, deep green-black with a lighter green in dark mode, one yellow for the shuttle), base/global components in `src/styles/base.css`. Fonts (Bricolage Grotesque, Instrument Sans, JetBrains Mono) are bundled through `@fontsource` packages, so nothing loads from a font CDN. Every view's `<script>` block was kept as it was; only templates and styles were replaced. No route, store, API call or socket handler changed.
+- **Why:** the old UI mixed hard-coded navy/teal values per component with no shared system. Tokens give one place to change the green when the exact ABU hex is confirmed (`--brand`, `--header-bg`).
+- **Assumption:** brand green is the stand-in `#0B7A3E` until the exact ABU/Kasuwan Campus value is supplied. Dark mode follows the device setting (no toggle).
+- **Small behaviour-adjacent changes (revertible):**
+  - `DashboardView`: the four hard-coded stat cards (14 shuttles, 4 routes, 8m wait, NOMINAL) were removed; the live panel now shows real shuttle and route counts from state it already holds. The change-password form moved from an always-visible panel into an Account sheet (opened from the sidebar user badge or the mobile Account tab), together with Sign out. Mobile navigation is now a bottom tab bar instead of a hamburger drawer.
+  - `App.vue`: the top bar is hidden on login/register (`meta.guestOnly`), which carry their own brand panel.
+  - `LiveMap.vue`: shuttle markers are only re-created when their stale/fresh state flips (previously on every fix), so the new CSS glide between GPS fixes works; zoom control moved to bottom-right; emoji icons replaced with inline SVG; route/stop colours set through CSS classes so they follow the theme.
+  - `LiveTrackingView.vue`, `RoutesView.vue`, `SchedulesView.vue`, `DashboardView.vue`: only icon/component import lines and the Account-sheet/Escape-key handling in `DashboardView` were added to the scripts.
+- **Rejected:** a public landing page at `/` (declined by the owner); a manual theme toggle (extra state for no requested benefit); loading fonts from Google Fonts (extra third-party request, blocked offline).
+- **Not yet done:** driver terminal and admin views still use the old styling, and some of their classes may look out of place next to the new header until stage 2 and 3.
+
+## 2026-11-17 - Student portal feedback, round 1
+
+- **Bell alerts:** the "Enable notifications" control is now a visible row inside the bell panel (it was a small link in the header that also replaced "Mark all read"). The row explains each state: undecided (Turn on button), blocked in the browser, unsupported (needs HTTPS / push-capable browser), allowed but push not configured. The underlying opt-in logic (`enableWebPush`, permission check) is unchanged.
+- **Mobile live view:** the map now fills the screen and the shuttle sheet peeks up from the bottom. Scrolling reveals it; scrolling back to the top, or tapping the map, tucks it away. Pure scroll position, no drag library. Desktop layout is unchanged.
+- **Errors:** booking/queue errors (Routes) and pre-booking errors (Schedules modal) now appear as a toast at the top of the page via `useToast` / `ToastHost`, instead of inside the card or modal. Login/register server errors stay at the top of their form.
+- **Passwords:** new `PasswordInput` (show/hide, Caps Lock warning) and `PasswordFeedback` (live rules, strength meter, "must differ from current", live confirm-match). Used on login, register and the Account sheet. Strength is advice only; the enforced rules are unchanged (min 6 characters, match). One new client-side rule: the new password may not equal the current one (Account sheet).
+- **Touch:** button hover styles now apply only on devices that can hover, so taps on phones do not leave buttons stuck in their hover look.
+
+## 2026-11-17 - Dev tunnel / phone testing: same-origin API via Vite proxy
+
+- **Problem:** in development the API base URL was the absolute `http://localhost:5000/api/v1`. When the app is opened from a phone or a dev tunnel (`https://...devtunnels.ms`), "localhost" resolves to that device, so login failed with `ERR_CONNECTION_REFUSED` (and an https page calling an http API would be blocked as mixed content anyway).
+- **Choice:** in development the frontend calls `/api/v1` and connects Socket.IO to its own origin; `vite.config.js` proxies `/api` and `/socket.io` (with websockets) to the backend. Only port 3000 has to be exposed or forwarded. Production behaviour is unchanged (`VITE_BACKEND_BASE_URL` / the Render URL).
+- **Side effect:** removes the old dev quirk where REST used port 5000 but sockets defaulted to 3500; `VITE_SOCKET_BASE_URL` is no longer needed in dev.
+- **Assumption:** the backend listens on port 5000 in development (`BACKEND` constant at the top of `vite.config.js`).
+
+## 2026-11-17 - Phone testing, follow-ups
+
+- **Origin rewrite:** the Vite dev proxy presents `Origin: http://localhost:3000` on every forwarded request (HTTP and websocket). The backend already always allows that origin, so tunnel URLs and LAN IPs no longer have to be added to `ALLOWED_ORIGINS` for development. Dev only; production is untouched.
+- **Login errors:** the axios 401 handler no longer treats a failed login/register (also 401) as an expired session. It used to reload `/login` and wipe the "Invalid credentials" message.
+- **Location errors:** `src/utils/locationErrors.js` gives plain-language reasons (insecure page, permission denied, no signal, timeout). The student live view now uses a toast instead of `alert()`. The driver terminal will adopt it when it is redesigned.
+- **Docs/scripts:** `docs/MOBILE_TESTING.md`; `npm run adb` runs `adb reverse tcp:3000 tcp:3000`.
+
+## 2026-11-17 - Phone test fixes + stage 2: driver terminal
+
+- **Push opt-in hang:** the service worker is registered only in production builds (`main.js`), so on the dev server `navigator.serviceWorker.ready` never resolved and "Turn on" stayed on "Asking…" until reload. `usePushNotifications` now looks for a registration first and caps the wait; the bell shows an explanatory note (`no-service-worker`) instead of hanging. In a production build the flow is unchanged.
+- **Location timeout:** sharing demanded a high-accuracy GPS fix within 15s and gave up on any error, which a budget phone indoors often cannot meet. It now takes a quick approximate fix first (pin appears straight away), then refines with GPS using a 30s timeout; only a permission refusal stops sharing, and the button shows "Finding you…" until the first fix.
+- **Driver terminal redesigned** (script logic unchanged except as listed): mobile-first single column, sticky shift bar with status, hero card with plate/route/GPS/link pills, load-ahead timeline, large boarding-code entry, position-source switch (GPS / manual simulator), end-shift card; two-column layout from 900px. Shared pieces: `AccountSheet` (password change + sign out, same live feedback as students), `ConfirmHost`/`useConfirm` (in-app dialog).
+- **Driver behaviour-adjacent changes (revertible):** `confirm()` and `alert()` replaced by the in-app dialog and toasts; setup errors, boarding results and GPS problems show as top-of-page toasts instead of inside cards; GPS errors use plain-language reasons (secure-connection hint on http); a transient GPS error after a good fix no longer flips the status to "error"; new password may not equal the current one.
+- **Not yet done:** admin views (stage 3) and refactoring the student Account sheet to use the shared `AccountSheet`.
+
+## 2026-11-17 - Stage 3: admin console + a day-pill bug
+
+- **Admin rebuilt** (scripts kept; templates and styles replaced): sidebar on desktop, a scrollable tab strip plus Account button on phones; shared responsive table styles in `AdminView.vue` (real tables on wide screens, stacked labelled cards under 720px). Screens: Active trips (live count, broadcast, monitor with occupancy bars), Fleet, Drivers, Routes (animated stop editor), Schedules (toggle-chip day picker).
+- **Behaviour-adjacent changes (revertible):** the always-visible "Account settings" panel is now the shared `AccountSheet` (live password feedback, sign out) opened from the sidebar badge / Account button; `confirm()` and `alert()` replaced by the in-app dialog and toasts; form errors and confirmations (register shuttle, onboard driver, create route/slot, broadcast sent) appear as top-of-page toasts instead of inline banners; the driver's temporary password shows live strength feedback (still plain text on purpose, so it can be read to the driver); new password may not equal the current one; schedule days shown as "Mon · Tue".
+- **Pre-existing bug fixed:** the student Schedules page compared `'Mon'` against the backend's lowercase `'mon'` (see `ScheduleSlot.recurringDays` enum), so the day pills never lit up, and Sunday was never shown. It now compares lowercase and includes Sun.
+- **Not changed:** routes, API calls, socket events (`admin:broadcast`, `trip:started/ended`), the 15s trips poll, request payloads.
+- **Not yet done:** the student `DashboardView` still has its own copy of the account sheet markup instead of using the shared `AccountSheet` (works the same; refactor is optional).

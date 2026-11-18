@@ -1,35 +1,33 @@
 <template>
-  <div class="login-container">
-    <h2>System Login</h2>
-    <p class="subtitle">Access the ABU Shuttle Tracking Portal</p>
+  <div class="form-wrap">
+    <p class="eyebrow rise" style="--i:1">Sign in</p>
+    <h2 class="rise" style="--i:2">Welcome back</h2>
+    <p class="subtitle rise" style="--i:3">Sign in to track shuttles and hold your seat.</p>
 
-    <div v-if="serverError" class="alert-banner danger-alert">
-      <AlertTriangle :size="16" class="icon-spacing" />
+    <div v-if="serverError" class="banner banner-danger" role="alert">
+      <AlertTriangle :size="16" />
       <span>{{ serverError }}</span>
     </div>
 
-    <form @submit="onSubmit" class="form-layout">
-      <div class="form-group">
-        <label for="email">Email Address</label>
+    <form @submit="onSubmit" class="form-layout rise" style="--i:4" novalidate>
+      <div class="field">
+        <label for="email">Email address</label>
         <div class="input-wrapper">
           <Mail :size="16" class="input-icon" />
-          <input id="email" v-model="email" type="email" placeholder="username@gmail.com" :class="{ 'input-error': errors.email }" />
+          <input id="email" v-model="email" class="input" type="email" autocomplete="email" placeholder="username@gmail.com" :class="{ 'has-error': errors.email }" />
         </div>
-        <span class="error-msg">{{ errors.email }}</span>
+        <span class="error-msg" role="alert">{{ errors.email }}</span>
       </div>
 
-      <div class="form-group">
+      <div class="field">
         <label for="password">Password</label>
-        <div class="input-wrapper">
-          <Lock :size="16" class="input-icon" />
-          <input id="password" v-model="password" type="password" placeholder="Enter your security password" :class="{ 'input-error': errors.password }" />
-        </div>
-        <span class="error-msg">{{ errors.password }}</span>
+        <PasswordInput id="password" v-model="password" autocomplete="current-password" placeholder="Enter your password" :has-error="!!errors.password" />
+        <span class="error-msg" role="alert">{{ errors.password }}</span>
       </div>
 
-      <button type="submit" :disabled="isSubmitting" class="btn btn-primary">
-        <Loader2 v-if="isSubmitting" :size="16" class="animate-spin icon-spacing" />
-        <span>{{ isSubmitting ? 'Authenticating...' : 'Login' }}</span>
+      <button type="submit" :disabled="isSubmitting" class="btn submit">
+        <Loader2 v-if="isSubmitting" :size="16" class="spin" />
+        <span>{{ isSubmitting ? 'Signing in…' : 'Sign in' }}</span>
       </button>
     </form>
   </div>
@@ -40,6 +38,7 @@ import { ref } from 'vue';
 import { useForm, useField } from 'vee-validate';
 import * as yup from 'yup';
 import { Mail, Lock, AlertTriangle, Loader2 } from 'lucide-vue-next';
+import PasswordInput from './PasswordInput.vue';
 import { useAuthStore } from '../stores/auth';
 import { useRouter } from 'vue-router';
 import { ROLE_HOME } from '../router';
@@ -66,148 +65,25 @@ const onSubmit = handleSubmit(async (values) => {
     // Route each role to its dedicated workspace
     router.push(ROLE_HOME[loggedInUser.role] || '/dashboard');
   } catch (err) {
-    serverError.value = err || 'Authentication server unreachable.';
+    serverError.value = err
   }
 });
 </script>
 
 <style scoped>
-.login-container {
-  max-width: 450px;
-  margin: 24px auto;
-  padding: 16px;
-  background: #FFFFFF;
-  border: 0.5px solid rgba(0, 0, 0, 0.10);
-  border-radius: 12px;
-  color: #1A1A18;
-}
-
-h2 {
-  font-size: 18px;
-  font-weight: 500;
-  margin: 0 0 4px 0;
-  text-align: center;
-}
-
-.subtitle {
-  font-size: 14px;
-  color: #5F5E5A;
-  margin: 0 0 16px 0;
-  text-align: center;
-}
-
-.form-layout {
-  display: flex;
-  flex-direction: column;
-  gap: 12px;
-}
-
-.form-group {
-  display: flex;
-  flex-direction: column;
-  gap: 4px;
-}
-
-label {
-  font-size: 12px;
-  font-weight: 500;
-  color: #5F5E5A;
-}
-
-.input-wrapper {
-  position: relative;
-  display: flex;
-  align-items: center;
-}
-
-.input-icon {
-  position: absolute;
-  left: 12px;
-  color: #5F5E5A;
-}
-
-input {
-  width: 100%;
-  height: 36px;
-  padding: 0 12px 0 36px;
-  box-sizing: border-box;
-  background: #F4F3EF;
-  border: 0.5px solid rgba(0, 0, 0, 0.10);
-  border-radius: 6px;
-  font-family: inherit;
-  font-size: 14px;
-  color: #1A1A18;
-  transition: border-color 0.15s, box-shadow 0.15s;
-}
-
-input:focus {
-  outline: none;
-  border-color: #1D9E75;
-  box-shadow: 0 0 0 2px #E1F5EE;
-}
-
-.input-error {
-  border-color: #E24B4A !important;
-  background-color: #FCEBEB;
-}
-
-.error-msg {
-  font-size: 12px;
-  color: #E24B4A;
-  min-height: 16px;
-}
-
-.btn {
-  display: inline-flex;
-  align-items: center;
-  justify-content: center;
-  height: 36px;
-  padding: 0 14px;
-  font-family: inherit;
-  font-size: 14px;
-  font-weight: 500;
-  border-radius: 8px;
-  border: none;
-  cursor: pointer;
-  transition: opacity 0.15s;
-}
-
-.btn:disabled {
-  opacity: 0.6;
-  cursor: not-allowed;
-}
-
-.btn-primary {
-  background: #1D9E75;
-  color: #FFFFFF;
-}
-
-.icon-spacing {
-  margin-right: 8px;
-}
-
-.animate-spin {
-  animation: spin 1s linear infinite;
-}
-
-@keyframes spin {
-  from { transform: rotate(0deg); }
-  to { transform: rotate(360deg); }
-}
-
-.alert-banner {
-  display: flex;
-  align-items: center;
-  padding: 12px;
-  border-radius: 8px;
-  font-size: 14px;
-  margin-bottom: 12px;
-  line-height: 1.4;
-}
-
-.danger-alert {
-  background: #FCEBEB;
-  color: #E24B4A;
-  border-left: 4px solid #E24B4A;
-}
+h2 { font-size: 40px; font-weight: 700; letter-spacing: -.035em; margin: 10px 0 8px; }
+.subtitle { color: var(--muted); margin-bottom: 28px; }
+.form-layout { display: flex; flex-direction: column; gap: 6px; }
+label { font: 600 12px var(--font-body); color: var(--muted); }
+.input-wrapper { position: relative; display: flex; align-items: center; }
+.input-icon { position: absolute; left: 14px; color: var(--stale); pointer-events: none; }
+.input { padding-left: 42px; }
+.input:focus ~ .input-icon, .input-wrapper:focus-within .input-icon { color: var(--brand); }
+.error-msg { font-size: 12px; color: var(--live); min-height: 18px; }
+.submit { width: 100%; margin-top: 6px; min-height: 48px; font-size: 15px; }
+.spin { animation: spin 1s linear infinite; }
+@keyframes spin { to { transform: rotate(360deg); } }
+.banner { display: flex; align-items: flex-start; gap: 10px; padding: 12px 14px; border-radius: 10px; font-size: 14px; margin-bottom: 18px; line-height: 1.4; animation: rise .35s var(--ease); }
+.banner svg { flex: none; margin-top: 2px; }
+.banner-danger { background: var(--danger-bg); color: var(--live); box-shadow: inset 3px 0 0 var(--live); }
 </style>

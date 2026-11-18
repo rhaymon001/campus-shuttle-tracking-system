@@ -1,55 +1,52 @@
 <template>
   <div class="admin-page">
-    <!-- Emergency broadcast -->
-    <section class="panel-card">
-      <div class="panel-header-label">EMERGENCY BROADCAST</div>
-      <div class="broadcast-row">
-        <input
-          v-model="broadcastMessage"
-          placeholder="e.g. Route A suspended due to convocation traffic"
-          class="text-input"
-          @keyup.enter="sendBroadcast"
-        />
-        <button class="btn btn-primary btn-compact" :disabled="!broadcastMessage.trim()" @click="sendBroadcast">
-          <Megaphone :size="14" class="icon-spacing" /> Send
-        </button>
+    <header class="page-head rise">
+      <div>
+        <p class="eyebrow">Operations</p>
+        <h1>Active trips</h1>
       </div>
-      <p v-if="broadcastFeedback" class="feedback-msg msg-good">{{ broadcastFeedback }}</p>
+      <span class="chip chip-live"><i></i><RollNumber :value="trips.length" />&nbsp;running</span>
+    </header>
+
+    <section class="panel rise" style="--i:1">
+      <div class="panel-title"><Megaphone :size="18" /><h2>Emergency broadcast</h2></div>
+      <p class="muted">Shows an alert banner to every student and driver who is connected right now.</p>
+      <div class="broadcast-row">
+        <input v-model="broadcastMessage" class="input" placeholder="e.g. Route A suspended due to convocation traffic" aria-label="Broadcast message" @keyup.enter="sendBroadcast" />
+        <button class="btn" :disabled="!broadcastMessage.trim()" @click="sendBroadcast"><Megaphone :size="15" /> Send</button>
+      </div>
     </section>
 
-    <!-- Active trips monitor -->
-    <section class="panel-card">
-      <div class="panel-header-label">ACTIVE TRIPS MONITOR</div>
+    <section class="panel rise" style="--i:2">
+      <div class="panel-title"><Activity :size="18" /><h2>Live monitor</h2></div>
 
-      <div v-if="loading" class="loading-state">Scanning active fleet loops...</div>
-      <div v-else-if="trips.length === 0" class="empty-state">No active trips are currently running.</div>
+      <div v-if="loading" class="skeleton"></div>
+      <div v-else-if="trips.length === 0" class="empty"><Activity :size="22" /><p>No active trips are running right now.</p></div>
 
-      <div v-else class="table-scroll">
+      <div v-else class="table-wrap">
         <table class="data-table">
           <thead>
-            <tr>
-              <th>Vehicle</th>
-              <th>Route</th>
-              <th>Driver</th>
-              <th>Occupancy</th>
-              <th>Started</th>
-              <th></th>
-            </tr>
+            <tr><th>Vehicle</th><th>Route</th><th>Driver</th><th>Occupancy</th><th>Started</th><th></th></tr>
           </thead>
-          <tbody>
+          <TransitionGroup name="row" tag="tbody">
             <tr v-for="trip in trips" :key="trip._id">
-              <td class="mono-cell">{{ trip.shuttleId?.plateNumber || '—' }}</td>
-              <td>{{ trip.routeId?.name || '—' }}</td>
-              <td>{{ trip.driverId?.name || '—' }}</td>
-              <td>{{ trip.seatsCurrentOccupancy }}/{{ trip.seatsTotal }}</td>
-              <td>{{ formatTime(trip.startedAt) }}</td>
-              <td>
-                <button class="btn btn-danger btn-tiny" :disabled="endingId === trip._id" @click="forceEnd(trip)">
-                  {{ endingId === trip._id ? 'Ending...' : 'Force End' }}
+              <td data-label="Vehicle" class="mono strong">{{ trip.shuttleId?.plateNumber || '—' }}</td>
+              <td data-label="Route">{{ trip.routeId?.name || '—' }}</td>
+              <td data-label="Driver">{{ trip.driverId?.name || '—' }}</td>
+              <td data-label="Occupancy">
+                <span class="occ">
+                  <span class="tnum">{{ trip.seatsCurrentOccupancy }}/{{ trip.seatsTotal }}</span>
+                  <span class="mini-bar" :class="occClass(trip)"><span :style="{ width: occPct(trip) + '%' }"></span></span>
+                </span>
+              </td>
+              <td data-label="Started" class="tnum">{{ formatTime(trip.startedAt) }}</td>
+              <td class="actions">
+                <button class="btn btn-danger btn-sm" :disabled="endingId === trip._id" @click="forceEnd(trip)">
+                  {{ endingId === trip._id ? 'Ending…' : 'Force end' }}
                 </button>
               </td>
             </tr>
-          </tbody>
+          </TransitionGroup>
         </table>
       </div>
     </section>
@@ -57,8 +54,11 @@
 </template>
 
 <script setup>
-import { ref, onMounted, onUnmounted } from 'vue';
-import { Megaphone } from 'lucide-vue-next';
+import { ref, onMounted, onUnmounted, watch } from 'vue';
+import { Megaphone, Activity } from 'lucide-vue-next';
+import RollNumber from '../../components/RollNumber.vue';
+import { useToast } from '../../composables/useToast';
+import { useConfirm } from '../../composables/useConfirm';
 import apiClient from '../../api/axios';
 import { useShuttleSocket } from '../../composables/useShuttleSocket';
 
@@ -84,13 +84,19 @@ const fetchTrips = async (isFirstLoad = false) => {
 };
 
 const forceEnd = async (trip) => {
-  if (!confirm(`Force-end the trip for ${trip.shuttleId?.plateNumber || 'this shuttle'}? The driver will be released.`)) return;
+  const ok = await askConfirm({
+    title: `Force-end ${trip.shuttleId?.plateNumber || 'this trip'}?`,
+    message: 'The driver will be released and the shuttle will disappear from every live map.',
+    confirmLabel: 'Force end',
+    danger: true
+  });
+  if (!ok) return;
   endingId.value = trip._id;
   try {
     await apiClient.patch(`/trips/${trip._id}/force-end`);
     await fetchTrips();
   } catch (err) {
-    alert(err.response?.data?.message || 'Failed to force-end trip.');
+    toast.error(err.response?.data?.message || 'Failed to force-end trip.');
   } finally {
     endingId.value = null;
   }
@@ -120,31 +126,21 @@ onMounted(() => {
 onUnmounted(() => {
   if (refreshPoll) clearInterval(refreshPoll);
 });
+
+const toast = useToast();
+const { ask: askConfirm } = useConfirm();
+watch(broadcastFeedback, (message) => { if (message) toast.success(message); });
+
+const occPct = (trip) => Math.min(100, Math.round(((trip.seatsCurrentOccupancy || 0) / (trip.seatsTotal || 1)) * 100));
+const occClass = (trip) => (occPct(trip) >= 85 ? 'full' : occPct(trip) >= 60 ? 'warn' : '');
 </script>
 
 <style scoped>
-.admin-page { display: flex; flex-direction: column; gap: 16px; }
-.panel-card { background: #FFFFFF; border: 0.5px solid rgba(0, 0, 0, 0.10); border-radius: 12px; padding: 16px; box-sizing: border-box; }
-.panel-header-label { font-size: 11px; font-weight: 500; text-transform: uppercase; color: #5F5E5A; padding-bottom: 6px; border-bottom: 0.5px solid rgba(0, 0, 0, 0.1); margin-bottom: 12px; }
-.loading-state { font-size: 13px; color: #5F5E5A; text-align: center; padding: 24px 0; font-style: italic; }
-.empty-state { font-size: 13px; color: #5F5E5A; text-align: center; padding: 24px 0; }
-
-.broadcast-row { display: flex; gap: 8px; }
-.text-input { flex: 1; height: 38px; border: 0.5px solid rgba(0, 0, 0, 0.2); border-radius: 8px; padding: 0 12px; font-size: 13px; background: #F4F3EF; color: #1A1A18; box-sizing: border-box; min-width: 0; }
-.feedback-msg { font-size: 12px; margin: 8px 0 0 0; }
-.msg-good { color: #0F6E56; }
-
-.btn { display: inline-flex; align-items: center; justify-content: center; gap: 4px; border-radius: 8px; border: none; font-size: 13px; font-weight: 500; cursor: pointer; }
-.btn:disabled { opacity: 0.55; cursor: not-allowed; }
-.btn-primary { background: #1D9E75; color: #FFFFFF; }
-.btn-danger { background: #D9383A; color: #FFFFFF; }
-.btn-compact { height: 38px; padding: 0 14px; }
-.btn-tiny { height: 28px; padding: 0 10px; font-size: 12px; }
-.icon-spacing { margin-right: 2px; }
-
-.table-scroll { overflow-x: auto; }
-.data-table { width: 100%; border-collapse: collapse; font-size: 13px; }
-.data-table th { text-align: left; font-size: 11px; text-transform: uppercase; color: #5F5E5A; font-weight: 500; padding: 8px 10px; border-bottom: 0.5px solid rgba(0, 0, 0, 0.1); white-space: nowrap; }
-.data-table td { padding: 10px; border-bottom: 0.5px solid rgba(0, 0, 0, 0.06); color: #1A1A18; white-space: nowrap; }
-.mono-cell { font-family: monospace; font-weight: 600; letter-spacing: 0.1em; color: #1D9E75; }
+.broadcast-row { display: flex; gap: 10px; }
+.broadcast-row .input { flex: 1; min-width: 0; }
+@media (max-width: 519px) { .broadcast-row { flex-direction: column; } }
+.row-enter-active { transition: opacity .35s var(--ease), transform .35s var(--ease); }
+.row-leave-active { transition: opacity .2s ease; }
+.row-enter-from { opacity: 0; transform: translateY(8px); }
+.row-leave-to { opacity: 0; }
 </style>

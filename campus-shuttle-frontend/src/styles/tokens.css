@@ -1,0 +1,71 @@
+/* motatrack design tokens. One source of truth for colour, type, radius, motion.
+   Light = ABU green + white. Dark = deep green-black with a lighter green. */
+@import '@fontsource-variable/bricolage-grotesque/opsz.css';
+@import '@fontsource-variable/instrument-sans/wght.css';
+@import '@fontsource/jetbrains-mono/latin-500.css';
+
+:root {
+  --bg: #FFFFFF;
+  --surface: #F3F8F4;
+  --surface-2: #E7F0E9;
+  --ink: #0F1A13;
+  --muted: #55625A;
+  --line: #D8E4DA;
+  --brand: #0B7A3E;          /* ABU green (stand-in until confirmed) */
+  --brand-deep: #08592D;
+  --on-brand: #FFFFFF;
+  --header-bg: #0B7A3E;
+  --header-ink: #FFFFFF;
+  --signal: #F2B01E;         /* the shuttle, highlights */
+  --on-signal: #0F1A13;
+  --live: #C8431F;           /* live, late, alerts */
+  --warn: #9A6A0C;
+  --info: #2D6AA6;           /* student presence */
+  --stale: #8E9A92;
+  --danger-bg: #FBEBE6;
+  --warn-bg: #FBF1D9;
+  --ok-bg: #E2F1E7;
+
+  --font-display: 'Bricolage Grotesque Variable', 'Arial Narrow', system-ui, sans-serif;
+  --font-body: 'Instrument Sans Variable', system-ui, -apple-system, sans-serif;
+  --font-mono: 'JetBrains Mono', ui-monospace, 'SFMono-Regular', monospace;
+
+  --r-sm: 8px; --r-md: 12px; --r-lg: 18px;
+  --shadow-1: 0 1px 2px rgba(15, 26, 19, .06), 0 4px 14px rgba(15, 26, 19, .06);
+  --shadow-2: 0 10px 40px rgba(15, 26, 19, .18);
+  --header-h: 56px;
+  --nav-h: 64px;
+  --safe-b: env(safe-area-inset-bottom, 0px);
+  --safe-t: env(safe-area-inset-top, 0px);
+
+  --ease: cubic-bezier(.2, .7, .2, 1);
+  --t-fast: .16s;
+  --t-med: .28s;
+  color-scheme: light;
+}
+
+@media (prefers-color-scheme: dark) {
+  :root {
+    --bg: #0C130F;
+    --surface: #151E18;
+    --surface-2: #1C2820;
+    --ink: #EEF3EC;
+    --muted: #9BA89F;
+    --line: #26332A;
+    --brand: #4CC585;
+    --brand-deep: #7DD9A6;
+    --on-brand: #0C130F;
+    --header-bg: #151E18;
+    --header-ink: #EEF3EC;
+    --live: #F0764F;
+    --warn: #E3B04B;
+    --info: #6BA6E0;
+    --stale: #6C786F;
+    --danger-bg: #2B1912;
+    --warn-bg: #2A2310;
+    --ok-bg: #14281C;
+    --shadow-1: 0 1px 2px rgba(0, 0, 0, .4), 0 4px 14px rgba(0, 0, 0, .3);
+    --shadow-2: 0 10px 40px rgba(0, 0, 0, .6);
+    color-scheme: dark;
+  }
+}

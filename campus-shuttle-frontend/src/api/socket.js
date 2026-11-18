@@ -3,7 +3,10 @@ import { io } from 'socket.io-client';
 
 // Socket URL follows the REST backend origin (port must match — no /api/v1 here)
 const REST_BASE = import.meta.env.VITE_BACKEND_BASE_URL || 'http://localhost:3500/api/v1';
-const SOCKET_BASE_URL = import.meta.env.VITE_SOCKET_BASE_URL || REST_BASE.replace(/\/api\/v1\/?$/, '');
+// Dev: connect to the page's own origin; Vite proxies /socket.io to the backend (see vite.config.js).
+const SOCKET_BASE_URL =
+  import.meta.env.VITE_SOCKET_BASE_URL ||
+  (import.meta.env.MODE === 'development' ? window.location.origin : REST_BASE.replace(/\/api\/v1\/?$/, ''));
 
 let socket = null;
 
