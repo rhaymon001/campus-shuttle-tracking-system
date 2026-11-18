@@ -1,107 +1,69 @@
 <template>
-  <div class="dashboard-wrapper">
-    <header class="mobile-header">
-      <div class="brand">
-        <Bus :size="20" class="brand-teal" />
-        <span class="brand-text">ABU SHUTTLE · ADMIN</span>
-      </div>
-      <button @click="isMobileMenuOpen = !isMobileMenuOpen" class="menu-toggle-btn">
-        <Menu v-if="!isMobileMenuOpen" :size="24" />
-        <X v-else :size="24" />
-      </button>
-    </header>
-
-    <aside class="sidebar" :class="{ 'sidebar-open': isMobileMenuOpen }">
-      <div class="sidebar-brand-desktop">
-        <Bus :size="20" class="brand-teal" />
-        <span class="brand-text">ABU SHUTTLE · ADMIN</span>
-      </div>
-
-      <nav class="nav-menu">
-        <div class="section-label">Operations Control</div>
-
-        <router-link to="/admin" class="nav-item" exact-active-class="active" @click="closeMobileMenu">
-          <Activity :size="16" />
-          <span>Active Trips</span>
-        </router-link>
-
-        <router-link to="/admin/shuttles" class="nav-item" active-class="active" @click="closeMobileMenu">
-          <Bus :size="16" />
-          <span>Fleet</span>
-        </router-link>
-
-        <router-link to="/admin/routes" class="nav-item" active-class="active" @click="closeMobileMenu">
-          <Route :size="16" />
-          <span>Routes</span>
-        </router-link>
-
-        <router-link to="/admin/schedules" class="nav-item" active-class="active" @click="closeMobileMenu">
-          <CalendarClock :size="16" />
-          <span>Schedules</span>
-        </router-link>
-
-        <router-link to="/admin/drivers" class="nav-item" active-class="active" @click="closeMobileMenu">
-          <Users :size="16" />
-          <span>Drivers</span>
-        </router-link>
-
-        <div class="section-label" style="margin-top: 24px;">Account</div>
-        <button @click="handleLogout" class="nav-item logout-btn">
-          <LogOut :size="16" />
-          <span>Sign Out</span>
-        </button>
+  <div class="admin">
+    <aside class="sidebar">
+      <nav class="nav" aria-label="Admin">
+        <p class="eyebrow nav-label">Operations control</p>
+        <router-link to="/admin" class="nav-item" exact-active-class="active"><Activity :size="18" /><span>Active trips</span></router-link>
+        <router-link to="/admin/shuttles" class="nav-item" active-class="active"><Bus :size="18" /><span>Fleet</span></router-link>
+        <router-link to="/admin/routes" class="nav-item" active-class="active"><Route :size="18" /><span>Routes</span></router-link>
+        <router-link to="/admin/schedules" class="nav-item" active-class="active"><CalendarClock :size="18" /><span>Schedules</span></router-link>
+        <router-link to="/admin/drivers" class="nav-item" active-class="active"><Users :size="18" /><span>Drivers</span></router-link>
       </nav>
 
-      <div class="user-profile-badge">
-        <div class="avatar"><User :size="14" /></div>
-        <div class="user-meta">
-          <p class="user-name">{{ authStore.user?.name || 'Administrator' }}</p>
-          <p class="user-role-text">{{ authStore.user?.role || 'admin' }}</p>
-        </div>
-      </div>
+      <button class="user-badge" @click="isAccountOpen = true">
+        <span class="avatar">{{ initials }}</span>
+        <span class="who">
+          <strong>{{ authStore.user?.name || 'Administrator' }}</strong>
+          <small>Account and password</small>
+        </span>
+        <ChevronRight :size="16" />
+      </button>
     </aside>
 
-    <div v-if="isMobileMenuOpen" @click="isMobileMenuOpen = false" class="sidebar-overlay"></div>
+    <div class="mobile-bar">
+      <nav class="tabs" aria-label="Admin">
+        <router-link to="/admin" class="tab" exact-active-class="active"><Activity :size="15" />Trips</router-link>
+        <router-link to="/admin/shuttles" class="tab" active-class="active"><Bus :size="15" />Fleet</router-link>
+        <router-link to="/admin/routes" class="tab" active-class="active"><Route :size="15" />Routes</router-link>
+        <router-link to="/admin/schedules" class="tab" active-class="active"><CalendarClock :size="15" />Schedules</router-link>
+        <router-link to="/admin/drivers" class="tab" active-class="active"><Users :size="15" />Drivers</router-link>
+      </nav>
+      <button class="acct" aria-label="Account" @click="isAccountOpen = true"><UserRound :size="18" /></button>
+    </div>
 
-    <main class="dashboard-content">
-      <section class="settings-panel">
-        <div class="panel-header-label">ACCOUNT SETTINGS</div>
-        <form class="password-form" @submit.prevent="handlePasswordChange">
-          <div class="field-group">
-            <label>Current password</label>
-            <input v-model="passwordForm.currentPassword" type="password" placeholder="Enter current password" />
-          </div>
-          <div class="field-group">
-            <label>New password</label>
-            <input v-model="passwordForm.newPassword" type="password" placeholder="Enter new password" />
-          </div>
-          <div class="field-group">
-            <label>Confirm password</label>
-            <input v-model="passwordForm.confirmPassword" type="password" placeholder="Confirm new password" />
-          </div>
-          <button class="btn btn-primary" type="submit" :disabled="changingPassword || !canSubmitPasswordForm">
-            {{ changingPassword ? 'Updating...' : 'Change Password' }}
-          </button>
-        </form>
-        <p v-if="passwordFeedback" :class="passwordFeedback.type === 'success' ? 'msg-success' : 'msg-error'">
-          {{ passwordFeedback.message }}
-        </p>
-      </section>
+    <div class="content">
+      <router-view v-slot="{ Component, route }">
+        <Transition name="view" mode="out-in">
+          <component :is="Component" :key="route.path" />
+        </Transition>
+      </router-view>
+    </div>
 
-      <router-view />
-    </main>
+    <AccountSheet
+      :open="isAccountOpen"
+      :name="authStore.user?.name || ''"
+      :role="authStore.user?.role || 'admin'"
+      :form="passwordForm"
+      :feedback="passwordFeedback"
+      :changing="changingPassword"
+      :can-submit="!!canSubmitPasswordForm"
+      @close="isAccountOpen = false"
+      @submit="handlePasswordChange"
+      @logout="handleLogout"
+    />
   </div>
 </template>
 
 <script setup>
 import { computed, reactive, ref } from 'vue';
 import { useRouter } from 'vue-router';
-import { Bus, Activity, Route, CalendarClock, Users, LogOut, User, Menu, X } from 'lucide-vue-next';
+import { Bus, Activity, Route, CalendarClock, Users, UserRound, ChevronRight } from 'lucide-vue-next';
+import AccountSheet from '../../components/AccountSheet.vue';
 import { useAuthStore } from '../../stores/auth';
 
 const authStore = useAuthStore();
 const router = useRouter();
-const isMobileMenuOpen = ref(false);
+const isAccountOpen = ref(false); // account sheet (password + sign out)
 const changingPassword = ref(false);
 const passwordFeedback = ref(null);
 
@@ -113,10 +75,11 @@ const passwordForm = reactive({
 
 const canSubmitPasswordForm = computed(() => {
   return passwordForm.currentPassword && passwordForm.newPassword && passwordForm.confirmPassword &&
-    passwordForm.newPassword.length >= 6 && passwordForm.newPassword === passwordForm.confirmPassword;
+    passwordForm.newPassword.length >= 6 && passwordForm.newPassword === passwordForm.confirmPassword &&
+    passwordForm.newPassword !== passwordForm.currentPassword;
 });
 
-const closeMobileMenu = () => { isMobileMenuOpen.value = false; };
+const initials = computed(() => (authStore.user?.name || 'A').split(/\s+/).filter(Boolean).slice(0, 2).map((w) => w[0].toUpperCase()).join(''));
 const handleLogout = () => { authStore.logout(); router.push('/login'); };
 
 const handlePasswordChange = async () => {
@@ -146,33 +109,78 @@ const handlePasswordChange = async () => {
 </script>
 
 <style scoped>
-.dashboard-wrapper { display: flex; flex-direction: column; min-height: 100vh; width: 100vw; box-sizing: border-box; }
-.mobile-header { display: flex; align-items: center; justify-content: space-between; height: 56px; background: #0D2137; color: #FFFFFF; padding: 0 16px; box-sizing: border-box; border-bottom: 0.5px solid rgba(255, 255, 255, 0.1); position: sticky; top: 0; z-index: 100; }
-.brand { display: flex; align-items: center; gap: 8px; }
-.brand-teal { color: #1D9E75; }
-.brand-text { font-size: 15px; font-weight: 500; letter-spacing: 0.05em; }
-.menu-toggle-btn { background: transparent; border: none; color: #FFFFFF; cursor: pointer; display: flex; align-items: center; padding: 4px; }
-.sidebar { position: fixed; top: 0; left: 0; bottom: 0; width: 240px; background: #0D2137; color: #FFFFFF; display: flex; flex-direction: column; padding: 16px; box-sizing: border-box; border-right: 0.5px solid rgba(255, 255, 255, 0.1); transform: translateX(-100%); transition: transform 0.2s ease-in-out; z-index: 200; }
-.sidebar-open { transform: translateX(0); }
-.sidebar-brand-desktop { display: none; }
-.sidebar-overlay { position: fixed; top: 0; left: 0; right: 0; bottom: 0; background: rgba(0, 0, 0, 0.4); z-index: 150; }
-.nav-menu { display: flex; flex-direction: column; gap: 4px; flex: 1; }
-.section-label { font-size: 11px; text-transform: uppercase; font-weight: 500; color: #5F5E5A; padding: 4px 8px; border-bottom: 0.5px solid rgba(255, 255, 255, 0.05); margin-bottom: 4px; }
-.nav-item { display: flex; align-items: center; gap: 12px; height: 36px; padding: 0 14px; color: #5F5E5A; text-decoration: none; font-size: 14px; font-weight: 500; border-radius: 8px; box-sizing: border-box; }
-.nav-item.active { background: #E1F5EE; color: #0F6E56; }
-.logout-btn { margin-top: auto; color: #E24B4A; background: transparent; border: none; text-align: left; width: 100%; cursor: pointer; }
-.user-profile-badge { display: flex; align-items: center; gap: 10px; padding-top: 16px; border-top: 0.5px solid rgba(255, 255, 255, 0.1); margin-top: 16px; }
-.avatar { width: 28px; height: 28px; border-radius: 999px; background: rgba(255, 255, 255, 0.1); display: flex; align-items: center; justify-content: center; color: #1D9E75; }
-.user-meta { line-height: 1.2; }
-.user-name { font-size: 13px; font-weight: 500; margin: 0; color: #FFFFFF; }
-.user-role-text { font-size: 11px; text-transform: uppercase; color: #5F5E5A; margin: 2px 0 0 0; }
-.dashboard-content { flex: 1; background: #F4F3EF; padding: 16px; box-sizing: border-box; display: flex; flex-direction: column; gap: 16px; overflow-y: auto; }
+.admin { --top: calc(var(--header-h) + var(--safe-t)); min-height: calc(100dvh - var(--top)); }
+.sidebar { display: none; }
+.nav-label { padding: 0 12px 10px; }
+.nav-item { position: relative; display: flex; align-items: center; gap: 12px; padding: 11px 12px; border-radius: 10px; color: var(--muted); text-decoration: none; font-weight: 600; font-size: 14px; transition: color var(--t-fast), background var(--t-fast), transform var(--t-fast) var(--ease); }
+.nav-item:hover { color: var(--ink); background: var(--surface-2); transform: translateX(2px); }
+.nav-item.active { color: var(--brand); background: var(--ok-bg); }
+.nav-item.active::before { content: ''; position: absolute; left: -16px; top: 9px; bottom: 9px; width: 4px; border-radius: 0 4px 4px 0; background: var(--signal); }
+.avatar { flex: none; width: 36px; height: 36px; border-radius: 50%; display: grid; place-items: center; background: var(--brand); color: var(--on-brand); font: 700 13px var(--font-display); }
+.user-badge { display: flex; align-items: center; gap: 10px; width: 100%; text-align: left; padding: 10px; border: 1px solid var(--line); border-radius: var(--r-md); background: var(--bg); transition: border-color var(--t-fast), transform var(--t-fast) var(--ease); }
+.user-badge:hover { border-color: var(--brand); transform: translateY(-1px); }
+.who { flex: 1; min-width: 0; display: flex; flex-direction: column; }
+.who strong { font-size: 13px; white-space: nowrap; overflow: hidden; text-overflow: ellipsis; }
+.who small { color: var(--muted); font-size: 12px; }
 
-@media (min-width: 768px) {
-  .dashboard-wrapper { flex-direction: row; }
-  .mobile-header { display: none; }
-  .sidebar { position: relative; transform: translateX(0); width: 240px; }
-  .sidebar-brand-desktop { display: flex; align-items: center; gap: 8px; padding-bottom: 16px; border-bottom: 0.5px solid rgba(255, 255, 255, 0.15); margin-bottom: 24px; }
-  .dashboard-content { padding: 24px; gap: 24px; }
+/* phones: scrollable tab strip + account button */
+.mobile-bar { position: sticky; top: var(--top); z-index: 300; display: flex; align-items: center; gap: 8px; padding: 10px 16px; background: var(--bg); border-bottom: 1px solid var(--line); }
+.tabs { flex: 1; min-width: 0; display: flex; gap: 8px; overflow-x: auto; scrollbar-width: none; padding: 2px 28px 2px 2px; -webkit-mask-image: linear-gradient(to right, #000 calc(100% - 32px), transparent); mask-image: linear-gradient(to right, #000 calc(100% - 32px), transparent); }
+.tabs::-webkit-scrollbar { display: none; }
+.tab { flex: none; display: inline-flex; align-items: center; gap: 7px; padding: 9px 14px; border-radius: 99px; border: 1.5px solid var(--line); color: var(--muted); text-decoration: none; font: 600 13px var(--font-body); transition: background var(--t-fast), color var(--t-fast), border-color var(--t-fast); }
+.tab.active { background: var(--brand); border-color: var(--brand); color: var(--on-brand); }
+.acct { flex: none; width: 40px; height: 40px; display: grid; place-items: center; border: 1.5px solid var(--line); border-radius: 50%; background: var(--bg); }
+.content { padding: 20px 16px calc(32px + var(--safe-b)); min-width: 0; }
+
+@media (min-width: 900px) {
+  .admin { display: grid; grid-template-columns: 248px minmax(0, 1fr); }
+  .sidebar { display: flex; flex-direction: column; justify-content: space-between; position: sticky; top: var(--top); height: calc(100dvh - var(--top)); padding: 24px 16px; border-right: 1px solid var(--line); background: var(--bg); }
+  .mobile-bar { display: none; }
+  .content { padding: 32px 36px 48px; max-width: 1320px; }
+}
+</style>
+
+<style>
+/* Shared by every admin screen */
+.admin-page { display: flex; flex-direction: column; gap: 20px; }
+.admin-page .page-head { display: flex; align-items: flex-end; justify-content: space-between; gap: 12px; flex-wrap: wrap; }
+.admin-page .page-head h1 { font-size: clamp(32px, 5vw, 46px); font-weight: 700; letter-spacing: -.04em; margin-top: 10px; }
+.admin-page .page-head .chip { text-transform: none; }
+.admin-page .panel { background: var(--surface); border: 1px solid var(--line); border-radius: var(--r-lg); padding: 20px; display: flex; flex-direction: column; gap: 16px; min-width: 0; }
+.admin-page .panel-title { display: flex; align-items: center; gap: 10px; }
+.admin-page .panel-title h2 { font-size: 20px; letter-spacing: -.03em; }
+.admin-page .panel-title svg { color: var(--brand); }
+.admin-page .muted { color: var(--muted); font-size: 14px; }
+.admin-page .form-grid { display: grid; grid-template-columns: repeat(auto-fit, minmax(210px, 1fr)); gap: 14px; }
+.admin-page .form-actions { display: flex; }
+.admin-page .empty { display: flex; flex-direction: column; align-items: center; gap: 10px; padding: 36px 16px; text-align: center; color: var(--muted); border: 1.5px dashed var(--line); border-radius: var(--r-md); }
+.admin-page .skeleton { height: 140px; border-radius: var(--r-md); background: linear-gradient(100deg, var(--surface) 30%, var(--surface-2) 50%, var(--surface) 70%) 0 0 / 200% 100%; animation: admin-shimmer 1.4s linear infinite; }
+@keyframes admin-shimmer { to { background-position: -200% 0; } }
+
+/* Tables: real tables on wide screens, stacked cards on phones */
+.admin-page .table-wrap { overflow-x: auto; }
+.admin-page .data-table { width: 100%; border-collapse: collapse; font-size: 14px; }
+.admin-page .data-table th { text-align: left; font: 500 11px var(--font-mono); letter-spacing: .06em; text-transform: uppercase; color: var(--muted); padding: 10px 14px; border-bottom: 1.5px solid var(--line); white-space: nowrap; }
+.admin-page .data-table td { padding: 14px; border-bottom: 1px solid var(--line); vertical-align: middle; }
+.admin-page .data-table tbody tr { transition: background var(--t-fast); }
+.admin-page .data-table tbody tr:hover { background: var(--bg); }
+.admin-page .data-table tbody tr:last-child td { border-bottom: 0; }
+.admin-page .mono { font-family: var(--font-mono); letter-spacing: .04em; }
+.admin-page .strong { font-weight: 600; }
+.admin-page .row-actions { display: flex; gap: 8px; flex-wrap: wrap; justify-content: flex-end; }
+.admin-page .mini-bar { display: block; width: 84px; height: 6px; border-radius: 99px; background: var(--surface-2); overflow: hidden; }
+.admin-page .mini-bar > span { display: block; height: 100%; border-radius: 99px; background: var(--brand); transition: width .8s var(--ease); }
+.admin-page .mini-bar.warn > span { background: var(--signal); }
+.admin-page .mini-bar.full > span { background: var(--live); }
+.admin-page .occ { display: flex; align-items: center; gap: 10px; }
+@media (max-width: 719px) {
+  .admin-page .data-table thead { display: none; }
+  .admin-page .data-table, .admin-page .data-table tbody, .admin-page .data-table tr, .admin-page .data-table td { display: block; width: 100%; }
+  .admin-page .data-table tr { padding: 12px 14px; margin-bottom: 10px; background: var(--bg); border: 1px solid var(--line); border-radius: var(--r-md); }
+  .admin-page .data-table td { display: flex; justify-content: space-between; align-items: center; gap: 12px; padding: 7px 0; border: 0; text-align: right; }
+  .admin-page .data-table td::before { content: attr(data-label); flex: none; font: 500 11px var(--font-mono); letter-spacing: .06em; text-transform: uppercase; color: var(--muted); text-align: left; }
+  .admin-page .data-table td:not([data-label])::before { display: none; }
+  .admin-page .data-table td.actions { justify-content: flex-end; padding-top: 12px; margin-top: 6px; border-top: 1px solid var(--line); }
+  .admin-page .row-actions { justify-content: flex-end; }
 }
 </style>

@@ -1,82 +1,46 @@
 <template>
   <div id="app">
-    <header class="app-header">
-      <span class="header-side"></span>
-      <h1>ABU Shuttle Tracking System</h1>
-      <span class="header-side header-bell-side">
-        <NotificationBell class="header-bell" />
-      </span>
+    <header v-if="!isGuestRoute" class="app-header">
+      <router-link to="/" class="home-link" aria-label="motatrack home">
+        <BrandMark :size="30" inverse />
+      </router-link>
+      <NotificationBell class="header-bell" />
     </header>
 
-    <main >
-      <router-view />
+    <ToastHost :below-header="!isGuestRoute" />
+    <ConfirmHost />
+
+    <main>
+      <router-view v-slot="{ Component, route }">
+        <Transition name="page" mode="out-in">
+          <component :is="Component" :key="route.matched[0]?.path ?? route.path" />
+        </Transition>
+      </router-view>
     </main>
   </div>
 </template>
 
 <script setup>
+import { computed } from 'vue';
+import { useRoute } from 'vue-router';
 import NotificationBell from './components/NotificationBell.vue';
+import BrandMark from './components/BrandMark.vue';
+import ToastHost from './components/ToastHost.vue';
+import ConfirmHost from './components/ConfirmHost.vue';
+
+// Login and register carry their own brand panel, so the top bar is for signed-in screens only
+const route = useRoute();
+const isGuestRoute = computed(() => !!route.meta?.guestOnly);
 </script>
 
 <style>
-body {
-  background-color: #F4F3EF;
-  margin: 0;
-  padding: 0;
-  font-family: 'Inter', system-ui, -apple-system, sans-serif;
-  color: #1A1A18;
-  -webkit-font-smoothing: antialiased;
-  overflow-x: hidden; /* Prevents any rogue horizontal scrollbars */
-}
-
-/* Base style applied ONLY when on Login or Register screens */
-.auth-layout {
-  min-height: 100vh;
-  display: flex;
-  flex-direction: column;
-}
-
 .app-header {
-  background-color: #0D2137;
-  color: #FFFFFF;
-  height: 56px;
-  display: flex;
-  align-items: center;
-  justify-content: space-between;
-  border-bottom: 0.5px solid rgba(255, 255, 255, 0.1);
-  padding: 0 16px;
+  position: sticky; top: 0; z-index: 400;
+  height: calc(var(--header-h) + var(--safe-t)); padding: var(--safe-t) 16px 0;
+  display: flex; align-items: center; justify-content: space-between;
+  background: var(--header-bg); color: var(--header-ink);
+  border-bottom: 1px solid color-mix(in srgb, var(--header-ink) 12%, transparent);
 }
-
-.app-header h1 {
-  margin: 0;
-  font-size: 24px;
-  font-weight: 500;
-  flex: 1;
-  text-align: center;
-  white-space: nowrap;
-  overflow: hidden;
-  text-overflow: ellipsis;
-}
-
-/* Symmetric side rails keep the title dead-centered while reserving room for the bell */
-.header-side {
-  flex: 0 0 36px;
-  display: flex;
-  align-items: center;
-  justify-content: flex-end;
-  min-width: 0;
-}
-
-.main-content {
-  flex: 1;
-  padding: 24px 16px;
-  box-sizing: border-box;
-}
-
-/* Dashboard Override: Strip everything down when the dashboard is active */
-main {
-  margin: 0;
-  padding: 0;
-  box-sizing: border-box;
-}
+.home-link { color: inherit; text-decoration: none; display: inline-flex; }
+main { margin: 0; padding: 0; }
 </style>

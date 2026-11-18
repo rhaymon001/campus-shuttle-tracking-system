@@ -17,6 +17,17 @@ const isSupported = () =>
 
 export { isSupported as pushSupported };
 
+// The service worker is only registered in production builds (see main.js). Waiting on
+// navigator.serviceWorker.ready when none exists never resolves, so look first and cap the wait.
+const readyRegistration = async (timeoutMs = 8000) => {
+  const existing = await navigator.serviceWorker.getRegistration();
+  if (!existing) return null;
+  return Promise.race([
+    navigator.serviceWorker.ready,
+    new Promise((resolve) => setTimeout(() => resolve(null), timeoutMs))
+  ]);
+};
+
 // Best-effort: enables push when possible, otherwise resolves false without noise.
 export const enableWebPush = async () => {
   if (!isSupported()) return { ok: false, reason: 'unsupported' };
@@ -32,7 +43,8 @@ export const enableWebPush = async () => {
   const publicKey = import.meta.env.VITE_VAPID_PUBLIC_KEY;
   if (!publicKey) return { ok: false, reason: 'no-vapid-key' };
 
-  const registration = await navigator.serviceWorker.ready;
+  const registration = await readyRegistration();
+  if (!registration) return { ok: false, reason: 'no-service-worker' };
   const subscription =
     (await registration.pushManager.getSubscription()) ||
     (await registration.pushManager.subscribe({
@@ -49,7 +61,8 @@ export const enableWebPush = async () => {
 
 export const disableWebPush = async () => {
   if (!isSupported()) return;
-  const registration = await navigator.serviceWorker.ready;
+  const registration = await readyRegistration();
+  if (!registration) return;
   const subscription = await registration.pushManager.getSubscription();
   if (!subscription) return;
   try {

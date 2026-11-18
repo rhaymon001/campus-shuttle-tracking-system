@@ -1,12 +1,17 @@
 {
-  "name": "ABU Shuttle Tracker & Virtual Queue",
-  "short_name": "ABU Shuttle",
+  "name": "motatrack: live shuttles and seats",
+  "short_name": "motatrack",
   "description": "Live campus shuttle tracking and virtual queue boarding at ABU Zaria.",
   "start_url": ".",
   "display": "standalone",
-  "background_color": "#F4F3EF",
-  "theme_color": "#0D2137",
+  "background_color": "#FFFFFF",
+  "theme_color": "#0B7A3E",
   "icons": [
-    { "src": "/favicon.svg", "sizes": "any", "type": "image/svg+xml", "purpose": "any maskable" }
+    {
+      "src": "/favicon.svg",
+      "sizes": "any",
+      "type": "image/svg+xml",
+      "purpose": "any maskable"
+    }
   ]
 }

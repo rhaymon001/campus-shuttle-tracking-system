@@ -1,76 +1,61 @@
 <template>
   <div class="admin-page">
-    <!-- Create a new route -->
-    <section class="panel-card">
-      <div class="panel-header-label">DEFINE NEW TRANSIT ROUTE</div>
+    <header class="page-head rise">
+      <div>
+        <p class="eyebrow">Network</p>
+        <h1>Routes</h1>
+      </div>
+      <span class="chip chip-muted"><i></i><RollNumber :value="routes.length" />&nbsp;defined</span>
+    </header>
 
-      <div v-if="formError" class="alert-banner danger-alert">{{ formError }}</div>
-      <div v-if="formSuccess" class="alert-banner success-alert">{{ formSuccess }}</div>
-
+    <section class="panel rise" style="--i:1">
+      <div class="panel-title"><Plus :size="18" /><h2>Define a transit route</h2></div>
       <div class="form-grid">
-        <div class="form-group">
-          <label>Route Name</label>
-          <input v-model="form.name" placeholder="e.g. Main Gate ⇄ Faculty of Engineering" class="text-input" />
-        </div>
-        <div class="form-group">
-          <label>Direction</label>
-          <input v-model="form.direction" placeholder="e.g. circular / return" class="text-input" />
-        </div>
-        <div class="form-group">
-          <label>Distance</label>
-          <input v-model="form.distance" placeholder="e.g. 12.5 km" class="text-input" />
-        </div>
+        <label class="field"><span>Route name</span><input v-model="form.name" class="input" placeholder="e.g. Main Gate ⇄ Faculty of Engineering" /></label>
+        <label class="field"><span>Direction</span><input v-model="form.direction" class="input" placeholder="e.g. circular / return" /></label>
+        <label class="field"><span>Distance</span><input v-model="form.distance" class="input" placeholder="e.g. 12.5 km" /></label>
       </div>
 
-      <div class="stops-section">
-        <div class="stops-header">
-          <label class="stops-label">Ordered Stops ({{ form.stops.length }})</label>
-          <button class="btn btn-outline btn-tiny" @click="addStop">
-            <Plus :size="12" class="icon-spacing" /> Add Stop
-          </button>
+      <div class="stops">
+        <div class="stops-head">
+          <p class="eyebrow">Ordered stops ({{ form.stops.length }})</p>
+          <button class="btn btn-ghost btn-sm" @click="addStop"><Plus :size="14" /> Add stop</button>
         </div>
 
-        <div v-for="(stop, i) in form.stops" :key="i" class="stop-row">
-          <span class="stop-index">{{ i + 1 }}</span>
-          <input v-model="stop.name" placeholder="Stop name" class="text-input stop-name" />
-          <input v-model.number="stop.lat" type="number" step="any" placeholder="Latitude" class="text-input stop-coord" />
-          <input v-model.number="stop.lng" type="number" step="any" placeholder="Longitude" class="text-input stop-coord" />
-          <button class="remove-stop-btn" :disabled="form.stops.length <= 2" @click="form.stops.splice(i, 1)">
-            <Trash2 :size="14" />
-          </button>
-        </div>
+        <TransitionGroup name="stop" tag="div" class="stop-list">
+          <div v-for="(stop, i) in form.stops" :key="stop._k" class="stop-row">
+            <span class="stop-index">{{ i + 1 }}</span>
+            <input v-model="stop.name" class="input stop-name" placeholder="Stop name" aria-label="Stop name" />
+            <input v-model.number="stop.lat" class="input stop-coord" type="number" step="any" placeholder="Latitude" aria-label="Latitude" />
+            <input v-model.number="stop.lng" class="input stop-coord" type="number" step="any" placeholder="Longitude" aria-label="Longitude" />
+            <button class="remove" :disabled="form.stops.length <= 2" aria-label="Remove stop" @click="form.stops.splice(i, 1)"><Trash2 :size="16" /></button>
+          </div>
+        </TransitionGroup>
       </div>
 
-      <button class="btn btn-primary" :disabled="!canSubmit || saving" @click="createRoute">
-        {{ saving ? 'Saving...' : 'Create Route' }}
-      </button>
+      <div class="form-actions">
+        <button class="btn" :disabled="!canSubmit || saving" @click="createRoute">
+          <Loader2 v-if="saving" :size="16" class="spin" />{{ saving ? 'Saving…' : 'Create route' }}
+        </button>
+      </div>
     </section>
 
-    <!-- Existing routes -->
-    <section class="panel-card">
-      <div class="panel-header-label">CAMPUS ROUTE NETWORK</div>
+    <section class="panel rise" style="--i:2">
+      <div class="panel-title"><Route :size="18" /><h2>Campus route network</h2></div>
 
-      <div v-if="loading" class="loading-state">Loading route network...</div>
-      <div v-else-if="routes.length === 0" class="empty-state">No routes defined yet.</div>
+      <div v-if="loading" class="skeleton"></div>
+      <div v-else-if="routes.length === 0" class="empty"><Route :size="22" /><p>No routes defined yet.</p></div>
 
-      <div v-else class="table-scroll">
+      <div v-else class="table-wrap">
         <table class="data-table">
-          <thead>
-            <tr>
-              <th>Name</th>
-              <th>Direction</th>
-              <th>Distance</th>
-              <th>Stops</th>
-              <th>Active Buses</th>
-            </tr>
-          </thead>
+          <thead><tr><th>Name</th><th>Direction</th><th>Distance</th><th>Stops</th><th>Active buses</th></tr></thead>
           <tbody>
             <tr v-for="r in routes" :key="r._id">
-              <td>{{ r.name }}</td>
-              <td>{{ r.direction }}</td>
-              <td>{{ r.distance || '—' }}</td>
-              <td>{{ r.stops?.length || 0 }}</td>
-              <td>{{ r.activeBuses || 0 }}</td>
+              <td data-label="Name" class="strong">{{ r.name }}</td>
+              <td data-label="Direction">{{ r.direction }}</td>
+              <td data-label="Distance" class="tnum">{{ r.distance || '—' }}</td>
+              <td data-label="Stops" class="tnum">{{ r.stops?.length || 0 }}</td>
+              <td data-label="Active buses"><span v-if="r.activeBuses" class="chip chip-live"><i></i>{{ r.activeBuses }}</span><span v-else class="muted">0</span></td>
             </tr>
           </tbody>
         </table>
@@ -80,8 +65,10 @@
 </template>
 
 <script setup>
-import { ref, reactive, computed, onMounted } from 'vue';
-import { Plus, Trash2 } from 'lucide-vue-next';
+import { ref, reactive, computed, onMounted, watch } from 'vue';
+import { Plus, Trash2, Route, Loader2 } from 'lucide-vue-next';
+import RollNumber from '../../components/RollNumber.vue';
+import { useToast } from '../../composables/useToast';
 import apiClient from '../../api/axios';
 
 const routes = ref([]);
@@ -90,7 +77,8 @@ const saving = ref(false);
 const formError = ref('');
 const formSuccess = ref('');
 
-const blankStop = () => ({ name: '', lat: null, lng: null });
+let stopKey = 0; // stable key per stop row so rows animate correctly when added/removed
+const blankStop = () => ({ name: '', lat: null, lng: null, _k: ++stopKey });
 
 const form = reactive({
   name: '',
@@ -147,47 +135,34 @@ const createRoute = async () => {
 };
 
 onMounted(() => fetchRoutes(true));
+
+// Form errors and confirmations appear at the top of the page as toasts, not inside the card
+const toast = useToast();
+watch(formError, (message) => { if (message) toast.error(message); });
+watch(formSuccess, (message) => { if (message) toast.success(message); });
 </script>
 
 <style scoped>
-.admin-page { display: flex; flex-direction: column; gap: 16px; }
-.panel-card { background: #FFFFFF; border: 0.5px solid rgba(0, 0, 0, 0.10); border-radius: 12px; padding: 16px; box-sizing: border-box; }
-.panel-header-label { font-size: 11px; font-weight: 500; text-transform: uppercase; color: #5F5E5A; padding-bottom: 6px; border-bottom: 0.5px solid rgba(0, 0, 0, 0.1); margin-bottom: 12px; }
-.loading-state { font-size: 13px; color: #5F5E5A; text-align: center; padding: 24px 0; font-style: italic; }
-.empty-state { font-size: 13px; color: #5F5E5A; text-align: center; padding: 24px 0; }
-
-.form-grid { display: flex; flex-direction: column; gap: 12px; margin-bottom: 14px; }
-.form-group { display: flex; flex-direction: column; gap: 6px; }
-.form-group label { font-size: 12px; font-weight: 500; text-transform: uppercase; color: #5F5E5A; }
-.text-input { height: 38px; border: 0.5px solid rgba(0, 0, 0, 0.2); border-radius: 8px; padding: 0 12px; font-size: 13px; background: #F4F3EF; color: #1A1A18; box-sizing: border-box; min-width: 0; }
-
-.stops-section { margin-bottom: 16px; }
-.stops-header { display: flex; align-items: center; justify-content: space-between; margin-bottom: 10px; }
-.stops-label { font-size: 12px; font-weight: 500; text-transform: uppercase; color: #5F5E5A; }
-.stop-row { display: flex; align-items: center; gap: 8px; margin-bottom: 8px; }
-.stop-index { width: 22px; height: 22px; border-radius: 999px; background: #E1F5EE; color: #0F6E56; font-size: 11px; font-weight: 600; display: flex; align-items: center; justify-content: center; flex-shrink: 0; }
-.stop-name { flex: 2; }
-.stop-coord { flex: 1; }
-.remove-stop-btn { background: transparent; border: none; color: #D9383A; cursor: pointer; display: flex; padding: 4px; flex-shrink: 0; }
-.remove-stop-btn:disabled { opacity: 0.3; cursor: not-allowed; }
-
-.alert-banner { font-size: 13px; padding: 10px 12px; border-radius: 8px; margin-bottom: 12px; }
-.danger-alert { background: #FDECEC; color: #D9383A; }
-.success-alert { background: #E1F5EE; color: #0F6E56; }
-
-.btn { display: inline-flex; align-items: center; justify-content: center; gap: 4px; height: 40px; border-radius: 8px; border: none; font-size: 13px; font-weight: 500; cursor: pointer; padding: 0 16px; }
-.btn:disabled { opacity: 0.55; cursor: not-allowed; }
-.btn-primary { background: #1D9E75; color: #FFFFFF; }
-.btn-outline { background: transparent; border: 0.5px solid rgba(0, 0, 0, 0.2); color: #0D2137; }
-.btn-tiny { height: 28px; padding: 0 10px; font-size: 12px; }
-.icon-spacing { margin-right: 2px; }
-
-.table-scroll { overflow-x: auto; }
-.data-table { width: 100%; border-collapse: collapse; font-size: 13px; }
-.data-table th { text-align: left; font-size: 11px; text-transform: uppercase; color: #5F5E5A; font-weight: 500; padding: 8px 10px; border-bottom: 0.5px solid rgba(0, 0, 0, 0.1); white-space: nowrap; }
-.data-table td { padding: 10px; border-bottom: 0.5px solid rgba(0, 0, 0, 0.06); color: #1A1A18; }
-
-@media (min-width: 768px) {
-  .form-grid { display: grid; grid-template-columns: 2fr 1fr 1fr; }
+.stops { display: flex; flex-direction: column; gap: 12px; }
+.stops-head { display: flex; align-items: center; justify-content: space-between; gap: 12px; }
+.stop-list { display: flex; flex-direction: column; gap: 10px; position: relative; }
+.stop-row { display: grid; grid-template-columns: 30px minmax(0, 1fr) 36px; gap: 8px; align-items: center; }
+.stop-index { width: 28px; height: 28px; border-radius: 50%; display: grid; place-items: center; background: var(--brand); color: var(--on-brand); font: 500 12px var(--font-mono); }
+.stop-name { grid-column: 2 / 3; }
+.stop-coord { grid-column: 2 / 3; }
+.remove { grid-column: 3; grid-row: 1; width: 36px; height: 36px; display: grid; place-items: center; border: 0; border-radius: 10px; background: none; color: var(--muted); transition: background var(--t-fast), color var(--t-fast); }
+.remove:hover:not(:disabled) { background: var(--danger-bg); color: var(--live); }
+.remove:disabled { opacity: .3; cursor: not-allowed; }
+@media (min-width: 720px) {
+  .stop-row { grid-template-columns: 30px minmax(0, 2fr) minmax(0, 1fr) minmax(0, 1fr) 36px; }
+  .stop-name, .stop-coord { grid-column: auto; }
+  .remove { grid-column: auto; grid-row: auto; }
 }
+.stop-enter-active { transition: opacity .3s var(--ease), transform .3s var(--ease); }
+.stop-leave-active { transition: opacity .2s ease, transform .2s ease; position: absolute; left: 0; right: 0; }
+.stop-enter-from { opacity: 0; transform: translateY(-8px); }
+.stop-leave-to { opacity: 0; transform: translateX(16px); }
+.stop-move { transition: transform .3s var(--ease); }
+.spin { animation: spin 1s linear infinite; }
+@keyframes spin { to { transform: rotate(360deg); } }
 </style>

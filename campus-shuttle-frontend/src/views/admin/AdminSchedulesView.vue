@@ -1,53 +1,38 @@
 <template>
   <div class="admin-page">
-    <section class="panel-card">
-      <div class="panel-header-label">CREATE SCHEDULE SLOT</div>
+    <header class="page-head rise">
+      <div>
+        <p class="eyebrow">Timetable</p>
+        <h1>Schedules</h1>
+      </div>
+      <span class="chip chip-muted"><i></i><RollNumber :value="slots.length" />&nbsp;slots</span>
+    </header>
 
-      <div v-if="formError" class="alert-banner danger-alert">{{ formError }}</div>
-      <div v-if="formSuccess" class="alert-banner success-alert">{{ formSuccess }}</div>
-
+    <section class="panel rise" style="--i:1">
+      <div class="panel-title"><Plus :size="18" /><h2>Create a schedule slot</h2></div>
       <div class="form-grid">
-        <div class="form-group">
-          <label>Route</label>
-          <select v-model="form.routeId" class="text-input">
+        <label class="field">
+          <span>Route</span>
+          <select v-model="form.routeId" class="select">
             <option value="">Select a route</option>
-            <option v-for="route in routes" :key="route._id" :value="route._id">
-              {{ route.name }}
-            </option>
+            <option v-for="route in routes" :key="route._id" :value="route._id">{{ route.name }}</option>
           </select>
-        </div>
-
-        <div class="form-group">
-          <label>Scheduling Type</label>
-          <select v-model="form.schedulingType" class="text-input">
+        </label>
+        <label class="field">
+          <span>Scheduling type</span>
+          <select v-model="form.schedulingType" class="select">
             <option value="continuous">Continuous</option>
             <option value="fixed">Fixed</option>
           </select>
-        </div>
-
-        <div class="form-group">
-          <label>Start Time</label>
-          <input v-model="form.startTime" type="time" class="text-input" />
-        </div>
-
-        <div class="form-group">
-          <label>End Time</label>
-          <input v-model="form.endTime" type="time" class="text-input" />
-        </div>
-
-        <div v-if="form.schedulingType === 'fixed'" class="form-group">
-          <label>Departure Time</label>
-          <input v-model="form.departureTime" type="time" class="text-input" />
-        </div>
-
-        <div class="form-group">
-          <label>Dispatch Frequency (minutes)</label>
-          <input v-model.number="form.estimatedFrequencyMinutes" type="number" min="5" step="5" class="text-input" />
-        </div>
+        </label>
+        <label class="field"><span>Start time</span><input v-model="form.startTime" class="input mono" type="time" /></label>
+        <label class="field"><span>End time</span><input v-model="form.endTime" class="input mono" type="time" /></label>
+        <label v-if="form.schedulingType === 'fixed'" class="field"><span>Departure time</span><input v-model="form.departureTime" class="input mono" type="time" /></label>
+        <label class="field"><span>Dispatch frequency (minutes)</span><input v-model.number="form.estimatedFrequencyMinutes" class="input" type="number" min="5" step="5" /></label>
       </div>
 
-      <div class="days-wrap">
-        <label class="days-label">Recurring Days</label>
+      <div class="days">
+        <p class="eyebrow">Recurring days</p>
         <div class="day-list">
           <label v-for="day in dayOptions" :key="day.value" class="day-chip">
             <input v-model="form.recurringDays" type="checkbox" :value="day.value" />
@@ -56,51 +41,33 @@
         </div>
       </div>
 
-      <button class="btn btn-primary" :disabled="!canSubmit || saving" @click="createSlot">
-        {{ saving ? 'Saving...' : 'Create Schedule Slot' }}
-      </button>
+      <div class="form-actions">
+        <button class="btn" :disabled="!canSubmit || saving" @click="createSlot">
+          <Loader2 v-if="saving" :size="16" class="spin" />{{ saving ? 'Saving…' : 'Create schedule slot' }}
+        </button>
+      </div>
     </section>
 
-    <section class="panel-card">
-      <div class="panel-header-label">CURRENT SCHEDULES</div>
+    <section class="panel rise" style="--i:2">
+      <div class="panel-title"><CalendarClock :size="18" /><h2>Current schedules</h2></div>
 
-      <div v-if="loading" class="loading-state">Loading schedules...</div>
-      <div v-else-if="slots.length === 0" class="empty-state">No schedule slots created yet.</div>
+      <div v-if="loading" class="skeleton"></div>
+      <div v-else-if="slots.length === 0" class="empty"><CalendarClock :size="22" /><p>No schedule slots created yet.</p></div>
 
-      <div v-else class="table-scroll">
+      <div v-else class="table-wrap">
         <table class="data-table">
-          <thead>
-            <tr>
-              <th>Route</th>
-              <th>Days</th>
-              <th>Window</th>
-              <th>Type</th>
-              <th>Status</th>
-              <th>Actions</th>
-            </tr>
-          </thead>
+          <thead><tr><th>Route</th><th>Days</th><th>Window</th><th>Type</th><th>Status</th><th></th></tr></thead>
           <tbody>
             <tr v-for="slot in slots" :key="slot._id">
-              <td>{{ slot.routeId?.name || 'Unknown route' }}</td>
-              <td>{{ formatDays(slot.recurringDays) }}</td>
-              <td>
-                <div>{{ slot.startTime }} – {{ slot.endTime }}</div>
-                <small v-if="slot.schedulingType === 'fixed'">{{ slot.departureTime }}</small>
-              </td>
-              <td>{{ slot.schedulingType }}</td>
-              <td>
-                <span class="badge" :class="slot.isActive ? 'badge-active' : 'badge-off'">
-                  {{ slot.isActive ? 'active' : 'inactive' }}
-                </span>
-              </td>
-              <td>
-                <div class="table-actions">
-                  <button class="btn btn-outline btn-tiny" :disabled="toggleingId === slot._id" @click="toggleSlot(slot)">
-                    {{ slot.isActive ? 'Disable' : 'Enable' }}
-                  </button>
-                  <button class="btn btn-danger btn-tiny" :disabled="deletingId === slot._id" @click="deleteSlot(slot)">
-                    {{ deletingId === slot._id ? 'Deleting...' : 'Delete' }}
-                  </button>
+              <td data-label="Route" class="strong">{{ slot.routeId?.name || 'Unknown route' }}</td>
+              <td data-label="Days" class="mono days-cell">{{ formatDays(slot.recurringDays) }}</td>
+              <td data-label="Window" class="mono">{{ slot.startTime }} – {{ slot.endTime }}<small v-if="slot.schedulingType === 'fixed'" class="dep"> · dep {{ slot.departureTime }}</small></td>
+              <td data-label="Type" style="text-transform: capitalize">{{ slot.schedulingType }}</td>
+              <td data-label="Status"><span class="chip" :class="slot.isActive ? 'chip-ok' : 'chip-muted'"><i></i>{{ slot.isActive ? 'active' : 'inactive' }}</span></td>
+              <td class="actions">
+                <div class="row-actions">
+                  <button class="btn btn-ghost btn-sm" :disabled="toggleingId === slot._id" @click="toggleSlot(slot)">{{ slot.isActive ? 'Disable' : 'Enable' }}</button>
+                  <button class="btn btn-danger btn-sm" :disabled="deletingId === slot._id" @click="deleteSlot(slot)">{{ deletingId === slot._id ? 'Deleting…' : 'Delete' }}</button>
                 </div>
               </td>
             </tr>
@@ -112,7 +79,11 @@
 </template>
 
 <script setup>
-import { ref, reactive, computed, onMounted } from 'vue';
+import { ref, reactive, computed, onMounted, watch } from 'vue';
+import { Plus, CalendarClock, Loader2 } from 'lucide-vue-next';
+import RollNumber from '../../components/RollNumber.vue';
+import { useToast } from '../../composables/useToast';
+import { useConfirm } from '../../composables/useConfirm';
 import apiClient from '../../api/axios';
 
 const routes = ref([]);
@@ -212,65 +183,56 @@ const toggleSlot = async (slot) => {
     });
     await fetchSlots();
   } catch (err) {
-    alert(err.response?.data?.message || 'Failed to update schedule status.');
+    toast.error(err.response?.data?.message || 'Failed to update schedule status.');
   } finally {
     toggleingId.value = null;
   }
 };
 
 const deleteSlot = async (slot) => {
-  if (!confirm(`Delete the schedule slot for ${slot.routeId?.name || 'this route'}?`)) return;
+  const ok = await askConfirm({
+    title: 'Delete this schedule slot?',
+    message: `${slot.routeId?.name || 'This route'}, ${slot.startTime} to ${slot.endTime}. Students will no longer see it.`,
+    confirmLabel: 'Delete',
+    danger: true
+  });
+  if (!ok) return;
   deletingId.value = slot._id;
   try {
     await apiClient.delete(`/transit/schedules/${slot._id}`);
     await fetchSlots();
   } catch (err) {
-    alert(err.response?.data?.message || 'Failed to delete schedule slot.');
+    toast.error(err.response?.data?.message || 'Failed to delete schedule slot.');
   } finally {
     deletingId.value = null;
   }
 };
 
-const formatDays = (days = []) => (days || []).map((d) => d.toUpperCase()).join(', ') || '—';
+const formatDays = (days = []) => (days || []).map((d) => d.charAt(0).toUpperCase() + d.slice(1)).join(' · ') || '—';
 
 onMounted(async () => {
   await Promise.all([fetchRoutes(), fetchSlots(true)]);
 });
+
+// Form errors and confirmations appear at the top of the page as toasts, not inside the card
+const toast = useToast();
+watch(formError, (message) => { if (message) toast.error(message); });
+watch(formSuccess, (message) => { if (message) toast.success(message); });
+const { ask: askConfirm } = useConfirm();
 </script>
 
 <style scoped>
-.admin-page { display: flex; flex-direction: column; gap: 16px; }
-.panel-card { background: #FFFFFF; border: 0.5px solid rgba(0, 0, 0, 0.10); border-radius: 12px; padding: 16px; box-sizing: border-box; }
-.panel-header-label { font-size: 11px; font-weight: 500; text-transform: uppercase; color: #5F5E5A; padding-bottom: 6px; border-bottom: 0.5px solid rgba(0, 0, 0, 0.1); margin-bottom: 12px; }
-.loading-state { font-size: 13px; color: #5F5E5A; text-align: center; padding: 24px 0; font-style: italic; }
-.empty-state { font-size: 13px; color: #5F5E5A; text-align: center; padding: 24px 0; }
-.form-grid { display: flex; flex-direction: column; gap: 12px; margin-bottom: 14px; }
-.form-group { display: flex; flex-direction: column; gap: 6px; }
-.form-group label { font-size: 12px; font-weight: 500; text-transform: uppercase; color: #5F5E5A; }
-.text-input { height: 38px; border: 0.5px solid rgba(0, 0, 0, 0.2); border-radius: 8px; padding: 0 12px; font-size: 13px; background: #F4F3EF; color: #1A1A18; box-sizing: border-box; }
-.days-wrap { margin-bottom: 16px; }
-.days-label { display: block; font-size: 12px; font-weight: 500; text-transform: uppercase; color: #5F5E5A; margin-bottom: 8px; }
+.days { display: flex; flex-direction: column; gap: 10px; }
 .day-list { display: flex; flex-wrap: wrap; gap: 8px; }
-.day-chip { display: inline-flex; align-items: center; gap: 6px; padding: 6px 10px; border: 0.5px solid rgba(0,0,0,0.15); border-radius: 999px; background: #F4F3EF; font-size: 12px; }
-.day-chip input { accent-color: #1D9E75; }
-.alert-banner { font-size: 13px; padding: 10px 12px; border-radius: 8px; margin-bottom: 12px; }
-.danger-alert { background: #FDECEC; color: #D9383A; }
-.success-alert { background: #E1F5EE; color: #0F6E56; }
-.btn { display: inline-flex; align-items: center; justify-content: center; gap: 4px; height: 40px; border-radius: 8px; border: none; font-size: 13px; font-weight: 500; cursor: pointer; padding: 0 16px; }
-.btn:disabled { opacity: 0.55; cursor: not-allowed; }
-.btn-primary { background: #1D9E75; color: #FFFFFF; }
-.btn-outline { background: transparent; border: 0.5px solid rgba(0, 0, 0, 0.2); color: #0D2137; }
-.btn-danger { background: #D9383A; color: #FFFFFF; }
-.btn-tiny { height: 28px; padding: 0 10px; font-size: 12px; }
-.table-scroll { overflow-x: auto; }
-.data-table { width: 100%; border-collapse: collapse; font-size: 13px; }
-.data-table th { text-align: left; font-size: 11px; text-transform: uppercase; color: #5F5E5A; font-weight: 500; padding: 8px 10px; border-bottom: 0.5px solid rgba(0, 0, 0, 0.1); white-space: nowrap; }
-.data-table td { padding: 10px; border-bottom: 0.5px solid rgba(0, 0, 0, 0.06); color: #1A1A18; white-space: nowrap; }
-.table-actions { display: flex; gap: 8px; flex-wrap: wrap; }
-.badge { font-size: 11px; font-weight: 500; padding: 2px 10px; border-radius: 999px; text-transform: capitalize; }
-.badge-active { background: #E1F5EE; color: #0F6E56; }
-.badge-off { background: #F4F3EF; color: #5F5E5A; }
-@media (min-width: 768px) {
-  .form-grid { display: grid; grid-template-columns: repeat(2, minmax(0, 1fr)); }
-}
+.day-chip { position: relative; cursor: pointer; }
+.day-chip input { position: absolute; opacity: 0; inset: 0; cursor: pointer; }
+.day-chip span { display: block; min-width: 52px; text-align: center; padding: 10px 14px; border-radius: 10px; border: 1.5px solid var(--line); background: var(--bg); font: 500 13px var(--font-mono); color: var(--muted); transition: background var(--t-fast), color var(--t-fast), border-color var(--t-fast), transform var(--t-fast) var(--ease); }
+.day-chip:hover span { border-color: var(--brand); }
+.day-chip input:checked + span { background: var(--brand); border-color: var(--brand); color: var(--on-brand); }
+.day-chip input:active + span { transform: scale(.95); }
+.day-chip input:focus-visible + span { outline: 3px solid var(--signal); outline-offset: 2px; }
+.days-cell { font-size: 12px; }
+.dep { color: var(--muted); }
+.spin { animation: spin 1s linear infinite; }
+@keyframes spin { to { transform: rotate(360deg); } }
 </style>

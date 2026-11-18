@@ -19,7 +19,7 @@ const props = defineProps({
   nearbyReport: { type: Object, default: null }
 });
 
-const emit = defineEmits(['select-bus']);
+const emit = defineEmits(['select-bus', 'map-click']);
 
 const mapEl = ref(null);
 let map = null;
@@ -35,11 +35,11 @@ const STALE_MS = 10000;
 // divIcon-based shuttle marker — deliberately avoids L.Icon.Default (broken asset URLs under Vite)
 const shuttleIcon = (stale) =>
   L.divIcon({
-    className: '', // suppress default leaflet-div-icon chrome
-    html: `<div class="shuttle-glyph ${stale ? 'shuttle-stale' : ''}">🚌</div>`,
-    iconSize: [34, 34],
-    iconAnchor: [17, 17],
-    popupAnchor: [0, -18]
+    className: 'shuttle-marker', // suppress default leaflet-div-icon chrome; also drives the glide transition
+    html: `<div class="shuttle-glyph ${stale ? 'shuttle-stale' : ''}"><svg viewBox="0 0 38 28" aria-hidden="true"><rect class="body" x="2" y="3" width="34" height="18" rx="6"/><rect class="win" x="7" y="8" width="24" height="6" rx="2"/><circle class="wheel" cx="11" cy="23" r="3"/><circle class="wheel" cx="27" cy="23" r="3"/></svg></div>`,
+    iconSize: [38, 28],
+    iconAnchor: [19, 14],
+    popupAnchor: [0, -16]
   });
 
 const isStale = (s) => !s.locationUpdatedAt || Date.now() - new Date(s.locationUpdatedAt).getTime() > STALE_MS;
@@ -81,8 +81,8 @@ const drawRoutes = () => {
     // Routes with a live bus render boldly; idle routes fade into context
     const isLive = props.activeRouteIds?.has?.(String(route._id));
     const line = isLive
-      ? { color: '#0D2137', weight: 4, opacity: 0.85 }
-      : { color: '#8A8880', weight: 2, opacity: 0.35, dashArray: '5 6' };
+      ? { color: '#0B7A3E', weight: 5, opacity: 0.9, className: 'route-live', lineCap: 'round', lineJoin: 'round' }
+      : { color: '#8E9A92', weight: 2, opacity: 0.5, dashArray: '5 6', className: 'route-idle' };
 
     const routeName = route.name || '';
     L.polyline(latlngs, line)
@@ -91,11 +91,12 @@ const drawRoutes = () => {
 
     for (const stop of stops) {
       L.circleMarker([stop.lat, stop.lng], {
-        radius: isLive ? 5 : 3,
-        color: isLive ? '#1D9E75' : '#8A8880',
-        weight: 2,
+        radius: isLive ? 6 : 3,
+        color: isLive ? '#0B7A3E' : '#8E9A92',
+        weight: 3,
         fillColor: '#FFFFFF',
-        fillOpacity: isLive ? 1 : 0.6
+        fillOpacity: isLive ? 1 : 0.6,
+        className: isLive ? 'stop-live' : 'stop-idle'
       })
         .bindTooltip(stop.name)
         .addTo(routeLayerGroup);
@@ -103,14 +104,18 @@ const drawRoutes = () => {
   }
 
   if (allPoints.length > 1) {
-    map.fitBounds(L.latLngBounds(allPoints), { padding: [30, 30] });
+    const wide = window.innerWidth >= 900; // the floating shuttle panel covers the left side on wide screens
+    map.fitBounds(L.latLngBounds(allPoints), {
+      paddingTopLeft: [wide ? 440 : 30, 30],
+      paddingBottomRight: [30, wide ? 30 : 150] // phones: keep the route clear of the peeking sheet
+    });
   }
 };
 
 // Student presence markers — blue pins, dropped from any peer heartbeat
 const presenceIcon = L.divIcon({
   className: '',
-  html: `<div class="presence-glyph">👤</div>`,
+  html: `<div class="presence-glyph"><svg viewBox="0 0 24 24" aria-hidden="true"><circle cx="12" cy="8" r="4"/><path d="M4 21c0-4.4 3.6-7 8-7s8 2.6 8 7z"/></svg></div>`,
   iconSize: [26, 26],
   iconAnchor: [13, 26],
   popupAnchor: [0, -26]
@@ -180,12 +185,17 @@ const syncShuttles = () => {
     let marker = shuttleMarkers.get(key);
     if (!marker) {
       marker = L.marker([s.lat, s.lng], { icon: shuttleIcon(isStale(s)) }).addTo(map);
+      marker._stale = isStale(s);
       // Asking for the bus-relative student report whenever a bus is clicked
       marker.on('click', () => emit('select-bus', s.tripId));
       shuttleMarkers.set(key, marker);
     } else {
       marker.setLatLng([s.lat, s.lng]);
-      marker.setIcon(shuttleIcon(isStale(s)));
+      const stale = isStale(s);
+      if (marker._stale !== stale) {
+        marker.setIcon(shuttleIcon(stale));
+        marker._stale = stale;
+      }
     }
     marker.bindPopup(popupHtml(s));
 
@@ -206,7 +216,9 @@ const syncShuttles = () => {
 };
 
 onMounted(() => {
-  map = L.map(mapEl.value).setView(ABU_ZARIA_CENTER, 14);
+  map = L.map(mapEl.value, { zoomControl: false }).setView(ABU_ZARIA_CENTER, 14);
+  L.control.zoom({ position: 'bottomright' }).addTo(map);
+  map.on('click', () => emit('map-click')); // lets the page tuck the mobile shuttle sheet away
   L.tileLayer('https://tile.openstreetmap.org/{z}/{x}/{y}.png', {
     attribution: '&copy; <a href="https://www.openstreetmap.org/copyright">OpenStreetMap</a> contributors',
     maxZoom: 19
@@ -240,34 +252,61 @@ onUnmounted(() => {
 
 <style>
 /* Unscoped on purpose: divIcon/popup HTML is injected outside Vue's scope attribute reach */
-.live-map { width: 100%; height: 100%; border-radius: 12px; z-index: 0; }
-.shuttle-glyph {
-  width: 34px; height: 34px; border-radius: 999px;
-  background: #1D9E75; border: 2px solid #0D2137;
-  display: flex; align-items: center; justify-content: center;
-  font-size: 17px; box-sizing: border-box;
-  box-shadow: 0 2px 6px rgba(0, 0, 0, 0.3);
+.live-map { width: 100%; height: 100%; z-index: 0; background: var(--surface); font-family: var(--font-body); }
+
+/* Soften OSM's palette so the route and shuttles carry the colour */
+.live-map .leaflet-tile-pane { filter: saturate(.55) contrast(.97) brightness(1.02); }
+@media (prefers-color-scheme: dark) {
+  .live-map .leaflet-tile-pane { filter: invert(1) hue-rotate(180deg) saturate(.45) brightness(.82) contrast(.92); }
 }
-.shuttle-stale { background: #BA7517; }
-.shuttle-popup { font-size: 12px; line-height: 1.6; }
+
+/* Routes and stops (classes beat SVG presentation attributes; CSS variables follow the theme) */
+.live-map path.route-live { stroke: var(--brand); }
+.live-map path.route-idle { stroke: var(--stale); }
+.live-map path.stop-live { stroke: var(--brand); fill: var(--bg); }
+.live-map path.stop-idle { stroke: var(--stale); fill: var(--bg); }
+
+/* Phones: keep zoom + attribution above the peeking shuttle sheet */
+@media (max-width: 899px) { .live-map .leaflet-bottom { bottom: 122px; } }
+
+/* Shuttle marker glides between GPS fixes; zoom keeps Leaflet's own timing */
+.leaflet-marker-icon.shuttle-marker { transition: transform 1.4s linear; }
+.leaflet-zoom-anim .leaflet-marker-icon.shuttle-marker { transition: transform .25s cubic-bezier(0, 0, .25, 1); }
+.shuttle-glyph { width: 38px; height: 28px; filter: drop-shadow(0 2px 3px rgb(0 0 0 / .35)); }
+.shuttle-glyph svg { width: 100%; height: 100%; display: block; overflow: visible; }
+.shuttle-glyph .body { fill: var(--signal); stroke: #0F1A13; stroke-width: 2.5; transition: fill .3s; }
+.shuttle-glyph .win { fill: #0F1A13; opacity: .8; }
+.shuttle-glyph .wheel { fill: #0F1A13; }
+.shuttle-stale .body { fill: var(--stale); }
+@media (prefers-color-scheme: dark) {
+  .shuttle-glyph .body { stroke: #F7F3E3; }
+  .shuttle-glyph .wheel { fill: #F7F3E3; }
+}
+.shuttle-popup { font-size: 13px; line-height: 1.6; }
+.shuttle-popup strong:first-child { font: 500 15px var(--font-mono); letter-spacing: .06em; }
 
 /* Opt-in student presence pins */
-.presence-glyph {
-  width: 26px; height: 26px; border-radius: 999px;
-  background: #378ADD; border: 2px solid #FFFFFF;
-  display: flex; align-items: center; justify-content: center;
-  font-size: 13px; box-sizing: border-box;
-  box-shadow: 0 1px 4px rgba(0, 0, 0, 0.3);
-}
+.presence-glyph { width: 26px; height: 26px; border-radius: 50%; background: var(--info); border: 2px solid #fff; box-shadow: 0 1px 4px rgb(0 0 0 / .35); display: grid; place-items: center; }
+.presence-glyph svg { width: 14px; height: 14px; fill: #fff; }
+
+/* Leaflet chrome, retuned to the tokens */
+.live-map .leaflet-popup-content-wrapper { background: var(--bg); color: var(--ink); border: 1px solid var(--line); border-radius: 12px; box-shadow: var(--shadow-2); }
+.live-map .leaflet-popup-tip { background: var(--bg); border: 1px solid var(--line); }
+.live-map .leaflet-popup-content { margin: 14px 16px; }
+.live-map a.leaflet-popup-close-button { color: var(--muted); }
+.live-map .leaflet-tooltip { background: var(--ink); color: var(--bg); border: 0; border-radius: 8px; box-shadow: var(--shadow-1); font: 600 12px var(--font-body); padding: 5px 9px; }
+.live-map .leaflet-tooltip::before { display: none; }
+.live-map .leaflet-bar { border: 1px solid var(--line); border-radius: 12px; overflow: hidden; box-shadow: var(--shadow-1); }
+.live-map .leaflet-bar a { background: var(--bg); color: var(--ink); border-bottom-color: var(--line); width: 38px; height: 38px; line-height: 38px; }
+.live-map .leaflet-bar a:hover { background: var(--surface-2); }
+.live-map .leaflet-control-attribution { background: color-mix(in srgb, var(--bg) 82%, transparent); color: var(--muted); font-size: 10px; }
+.live-map .leaflet-control-attribution a { color: var(--muted); }
 
 /* Bus-relative student list rendered inside the bus popup */
-.nearby-report { margin-top: 8px; padding-top: 8px; border-top: 1px solid #E6E5E1; }
+.nearby-report { margin-top: 10px; padding-top: 10px; border-top: 1px solid var(--line); }
 .nearby-head { line-height: 1.6; margin-bottom: 6px; }
-.presence-row {
-  display: flex; justify-content: space-between; gap: 12px;
-  padding: 3px 0; font-size: 12px;
-}
-.presence-row-name { color: #0D2137; }
-.presence-row-dist { color: #1D9E75; font-family: monospace; font-weight: 600; white-space: nowrap; }
-.presence-empty { font-size: 11px; color: #5F5E5A; font-style: italic; }
+.presence-row { display: flex; justify-content: space-between; gap: 12px; padding: 3px 0; font-size: 12px; }
+.presence-row-name { color: var(--ink); }
+.presence-row-dist { color: var(--brand); font-family: var(--font-mono); font-weight: 500; white-space: nowrap; }
+.presence-empty { font-size: 12px; color: var(--muted); font-style: italic; }
 </style>

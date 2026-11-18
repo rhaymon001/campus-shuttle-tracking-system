@@ -1,136 +1,131 @@
 <template>
-  <div class="page-container">
-    <div class="panel-header-label">CAMPUS SHUTTLE ROUTES</div>
+  <div class="page">
+    <header class="page-head rise">
+      <p class="eyebrow">Campus network</p>
+      <h1>Routes</h1>
+      <p class="lede">Pick a route, choose your stop, and hold a seat before the shuttle arrives.</p>
+    </header>
 
-    <div v-if="nearbyAlert" class="proximity-banner">
-      🚌 Your bus is approaching <strong>{{ nearbyAlert.stopName }}</strong> (approx. {{ nearbyAlert.etaMinutes }} min away) — Prepare to board!
-      <button class="banner-dismiss" @click="nearbyAlert = null">✕</button>
-    </div>
-    
-    <div v-if="loading" class="loading-state">Fetching campus routes...</div>
-    
+    <Transition name="alert">
+      <div v-if="nearbyAlert" class="banner banner-ok" role="status">
+        <Bus :size="18" />
+        <span>Your shuttle is approaching <strong>{{ nearbyAlert.stopName }}</strong>, about {{ nearbyAlert.etaMinutes }} min away. Get ready to board.</span>
+        <button class="banner-dismiss" aria-label="Dismiss" @click="nearbyAlert = null"><X :size="16" /></button>
+      </div>
+    </Transition>
+
+    <div v-if="loading" class="routes-stack"><div class="skeleton"></div><div class="skeleton"></div></div>
+
     <div v-else class="routes-stack">
-      <div v-for="route in routes" :key="route._id" class="route-card">
+      <article v-for="(route, i) in routes" :key="route._id" class="route-card rise" :class="{ open: expandedRouteId === route._id }" :style="{ '--i': i + 1 }">
         <div class="route-main">
-          <div class="route-icon-track">
-            <div class="station-dot teal-dot"></div>
-            <div class="connecting-line"></div>
-            <div class="station-dot navy-dot"></div>
-          </div>
-          
           <div class="route-details">
-            <h3 class="route-title">{{ route.name }}</h3>
+            <div class="title-row">
+              <h3 class="route-title">{{ route.name }}</h3>
+              <span v-if="(route.activeBuses || 0) > 0" class="chip chip-live"><i></i>{{ route.activeBuses }} running</span>
+              <span v-else class="chip chip-muted"><i></i>No bus now</span>
+            </div>
             <p class="route-direction" v-if="route.direction">{{ route.direction }}</p>
-            <p class="route-stops">
-              <span class="muted">Path:</span> {{ route.stops?.map(stop => stop.name).join(' → ') }}
-            </p>
           </div>
+          <dl class="route-meta-list">
+            <div><dt>Distance</dt><dd>{{ route.distance }}</dd></div>
+            <div><dt>Stops</dt><dd>{{ route.stops?.length || 0 }}</dd></div>
+          </dl>
         </div>
-        
-        <div class="route-meta">
-          <div class="meta-left">
-            <div class="meta-pill">
-              <span class="muted">Distance:</span> <span>{{ route.distance }}</span>
-            </div>
-            <div class="meta-pill">
-              <span class="muted">Active Buses:</span> <span class="highlight-teal">{{ route.activeBuses || 0 }}</span>
-            </div>
-          </div>
-          
-          <button 
-            @click="toggleQueueDrawer(route)" 
-            class="action-toggle-btn"
-            :class="{ 'btn-active': expandedRouteId === route._id || (activePass && activePass.routeId === route._id) }"
+
+        <ol class="stop-line" aria-label="Stops on this route">
+          <li v-for="(stop, si) in route.stops" :key="stop.name" :class="{ end: si === 0 || si === route.stops.length - 1 }">
+            <span class="pin"></span><span class="nm">{{ stop.name }}</span>
+          </li>
+        </ol>
+
+        <div class="route-actions">
+          <button
+            @click="toggleQueueDrawer(route)"
+            class="btn action-toggle-btn"
+            :class="{ 'btn-ghost': expandedRouteId === route._id && !(activePass && activePass.routeId === route._id) }"
           >
-            {{ expandedRouteId === route._id ? 'Close Panel' : (activePass && activePass.routeId === route._id ? 'View Active Pass' : 'Join Queue') }}
+            <Ticket :size="16" />
+            {{ expandedRouteId === route._id ? 'Close panel' : (activePass && activePass.routeId === route._id ? 'View active pass' : 'Join queue') }}
           </button>
         </div>
 
-        <div v-if="expandedRouteId === route._id" class="queue-drawer">
-          <div v-if="activePass && activePass.routeId === route._id" class="ticket-pass-display">
-            <div v-if="activePass.waitlisted" class="waitlist-badge">⏳ Waitlisted — Position #{{ activePass.waitlistPosition }}</div>
-            <div v-else class="pass-success-badge">🎉 Boarding Pass Active</div>
-            <p class="pass-msg">{{ activePass.message }}</p>
-            <p v-if="activePass.destStopName" class="pass-route-dest">
-              {{ activePass.stopName }} → <strong>{{ activePass.destStopName }}</strong>
-            </p>
-            
-            <div v-if="!activePass.waitlisted" class="boarding-code-box">
-              {{ activePass.code }}
+        <Transition name="drawer">
+          <div v-if="expandedRouteId === route._id" class="queue-drawer">
+            <div v-if="activePass && activePass.routeId === route._id" class="ticket-pass-display">
+              <div v-if="activePass.waitlisted" class="chip chip-warn"><i></i>Waitlisted · position #{{ activePass.waitlistPosition }}</div>
+              <div v-else class="chip chip-ok"><i></i>Boarding pass active</div>
+              <p class="pass-msg">{{ activePass.message }}</p>
+
+              <div class="ticket" :class="{ waiting: activePass.waitlisted }">
+                <p v-if="activePass.destStopName" class="pass-route-dest">
+                  <span>{{ activePass.stopName }}</span><ArrowRight :size="15" /><strong>{{ activePass.destStopName }}</strong>
+                </p>
+                <div v-if="!activePass.waitlisted" class="boarding-code-box">{{ activePass.code }}</div>
+                <div class="pass-expiry">
+                  {{ activePass.waitlisted ? 'Pass confirms automatically when a seat opens' : 'Expires in' }}
+                  <span v-if="!activePass.waitlisted" class="time-countdown tnum" :class="{ urgent: countdownText.startsWith('00:') }">{{ countdownText }}</span>
+                </div>
+              </div>
+
+              <div class="pass-actions">
+                <button @click="clearActivePass" class="clear-pass-btn">Clear and book another</button>
+                <button @click="cancelBoardingPass" class="btn btn-sm btn-danger" :disabled="cancellingPass">
+                  {{ cancellingPass ? 'Cancelling…' : 'Cancel pass' }}
+                </button>
+              </div>
             </div>
-            
-            <div class="pass-expiry">
-              {{ activePass.waitlisted ? 'Pass auto-confirms when a seat opens' : `Expires in:` }}
-              <span v-if="!activePass.waitlisted" class="time-countdown">{{ countdownText }}</span>
-            </div>
-            <div class="pass-actions">
-              <button @click="clearActivePass" class="clear-pass-btn">Clear / Book Another</button>
-              <button @click="cancelBoardingPass" class="cancel-pass-btn" :disabled="cancellingPass">
-                {{ cancellingPass ? 'Cancelling...' : 'Cancel Pass' }}
+
+            <div v-else class="queue-form">
+              <h4 class="drawer-title">Hold a seat</h4>
+
+              <label class="field">
+                <span>1 · Boarding stop</span>
+                <select v-model="queueForm.stopName" class="select" @change="queueForm.destStopName = ''">
+                  <option value="" disabled>Choose where you’re waiting</option>
+                  <option v-for="stop in route.stops" :key="stop.name" :value="stop.name">{{ stop.name }}</option>
+                </select>
+              </label>
+
+              <label class="field" v-if="queueForm.stopName">
+                <span>2 · Destination</span>
+                <select v-model="queueForm.destStopName" class="select">
+                  <option value="" disabled>Choose where you’ll get off</option>
+                  <option v-for="stop in destStopOptions" :key="stop.name" :value="stop.name">{{ stop.name }}</option>
+                </select>
+              </label>
+
+              <div class="field">
+                <span>3 · Shuttle</span>
+                <div v-if="loadingTrips" class="form-subtext">Looking for running shuttles…</div>
+                <div v-else-if="activeTrips.length === 0" class="banner banner-warn"><AlertTriangle :size="16" /><span>No shuttle is running on this route right now.</span></div>
+                <select v-else v-model="queueForm.tripId" class="select">
+                  <option value="" disabled>Choose an approaching shuttle</option>
+                  <option v-for="trip in activeTrips" :key="trip._id" :value="trip._id">
+                    {{ trip.shuttleId?.model || 'Shuttle' }} · {{ trip.shuttleId?.plateNumber || 'No plate' }} · {{ trip.seatsCurrentOccupancy }}/{{ trip.seatsTotal }} seats
+                  </option>
+                </select>
+              </div>
+
+              <button
+                @click="requestBoardingPass(route._id)"
+                class="btn submit-queue-btn"
+                :disabled="processingQueue || !queueForm.stopName || !queueForm.destStopName || !queueForm.tripId"
+              >
+                {{ processingQueue ? 'Getting your code…' : 'Get boarding code' }}
               </button>
             </div>
           </div>
-
-          <div v-else class="queue-form">
-            <h4 class="drawer-title">Virtual Queue Boarding Panel</h4>
-
-            <div v-if="queueError" class="queue-error-banner">
-              ⚠️ {{ queueError }}
-              <button class="banner-dismiss" @click="queueError = ''">✕</button>
-            </div>
-
-            <div class="form-group">
-              <label class="form-label">1. Select Your Current Boarding Stop</label>
-              <select v-model="queueForm.stopName" class="form-select" @change="queueForm.destStopName = ''">
-                <option value="" disabled>-- Choose a bus shelter stop --</option>
-                <option v-for="stop in route.stops" :key="stop.name" :value="stop.name">
-                  {{ stop.name }}
-                </option>
-              </select>
-            </div>
-
-            <div class="form-group" v-if="queueForm.stopName">
-              <label class="form-label">2. Select Your Destination Stop</label>
-              <select v-model="queueForm.destStopName" class="form-select">
-                <option value="" disabled>-- Choose where you'll alight --</option>
-                <option v-for="stop in destStopOptions" :key="stop.name" :value="stop.name">
-                  {{ stop.name }}
-                </option>
-              </select>
-            </div>
-
-            <div class="form-group">
-              <label class="form-label">3. Select an Active Shuttle Bus</label>
-              <div v-if="loadingTrips" class="form-subtext">Scanning campus telemetry...</div>
-              <div v-else-if="activeTrips.length === 0" class="no-trips-warning">
-                ⚠️ No active shuttle instances are running on this track right now.
-              </div>
-              <select v-else v-model="queueForm.tripId" class="form-select">
-                <option value="" disabled>-- Choose an approaching vehicle --</option>
-                <option v-for="trip in activeTrips" :key="trip._id" :value="trip._id">
-                  {{ trip.shuttleId?.model || 'Shuttle' }} [{{ trip.shuttleId?.plateNumber || 'No Plate' }}] 
-                  (Seats: {{ trip.seatsCurrentOccupancy }}/{{ trip.seatsTotal }})
-                </option>
-              </select>
-            </div>
-
-            <button 
-              @click="requestBoardingPass(route._id)" 
-              class="submit-queue-btn"
-              :disabled="processingQueue || !queueForm.stopName || !queueForm.destStopName || !queueForm.tripId"
-            >
-              {{ processingQueue ? 'Allocating Queue Token...' : 'Generate Boarding Code Pass' }}
-            </button>
-          </div>
-        </div>
-
-      </div>
+        </Transition>
+      </article>
     </div>
   </div>
 </template>
 
 <script setup>
-import { ref, onMounted, onUnmounted, reactive, computed } from 'vue';
+import { ref, onMounted, onUnmounted, reactive, computed, watch } from 'vue';
+import { useToast } from '../composables/useToast';
+import { Bus, Ticket, ArrowRight, AlertTriangle, X } from 'lucide-vue-next';
 import apiClient from '../api/axios';
 import { useShuttleSocket } from '../composables/useShuttleSocket';
 import { useAuthStore } from '../stores/auth';
@@ -404,145 +399,91 @@ const cancelBoardingPass = async () => {
     cancellingPass.value = false;
   }
 };
+
+// Queue/booking errors surface as a toast at the top of the page, not inside the route card
+const toast = useToast();
+watch(queueError, (message) => {
+  if (message) { toast.error(message); queueError.value = ''; }
+});
 </script>
 
 <style scoped>
-.page-container { padding: 4px 0; }
-.panel-header-label {
-  font-size: 11px;
-  font-weight: 500;
-  text-transform: uppercase;
-  color: #5F5E5A;
-  padding-bottom: 6px;
-  border-bottom: 0.5px solid rgba(0, 0, 0, 0.1);
-  margin-bottom: 16px;
-}
-.loading-state { font-size: 13px; color: #5F5E5A; text-align: center; padding: 40px 0; }
-.routes-stack { display: flex; flex-direction: column; gap: 12px; }
-.route-card {
-  background: #FFFFFF;
-  border: 0.5px solid rgba(0, 0, 0, 0.10);
-  border-radius: 12px;
-  padding: 16px;
-  display: flex;
-  flex-direction: column;
-  gap: 14px;
-}
-.route-main { display: flex; gap: 16px; }
-.route-icon-track { display: flex; flex-direction: column; align-items: center; padding-top: 4px; }
-.station-dot { width: 8px; height: 8px; border-radius: 999px; }
-.teal-dot { background: #1D9E75; }
-.navy-dot { background: #0D2137; }
-.connecting-line { width: 1px; flex: 1; background: rgba(0, 0, 0, 0.1); margin: 4px 0; min-height: 24px; }
-.route-details { flex: 1; }
-.route-title { font-size: 15px; font-weight: 500; margin: 0 0 4px 0; color: #1A1A18; }
-.route-direction { font-size: 11px; color: #5F5E5A; font-style: italic; margin: 0 0 3px 0; }
-.route-stops { font-size: 13px; margin: 0; color: #1A1A18; line-height: 1.4; }
-.muted { color: #5F5E5A; }
-.route-meta {
-  display: flex;
-  justify-content: space-between;
-  align-items: center;
-  border-top: 0.5px solid rgba(0, 0, 0, 0.05);
-  padding-top: 12px;
-}
-.meta-left { display: flex; gap: 8px; }
-.meta-pill {
-  background: #F4F3EF;
-  font-size: 11px;
-  font-weight: 500;
-  padding: 4px 10px;
-  border-radius: 6px;
-  display: flex;
-  gap: 4px;
-}
-.highlight-teal { color: #1D9E75; font-weight: 600; }
+.page { max-width: 1200px; margin: 0 auto; padding: 28px 16px 24px; }
+.page-head { margin-bottom: 24px; }
+.page-head h1 { font-size: clamp(36px, 6vw, 56px); font-weight: 700; letter-spacing: -.04em; margin: 10px 0 8px; }
+.lede { color: var(--muted); max-width: 52ch; }
 
-.action-toggle-btn {
-  background: #0D2137;
-  color: #FFFFFF;
-  border: none;
-  font-size: 12px;
-  font-weight: 500;
-  padding: 6px 14px;
-  border-radius: 6px;
-  cursor: pointer;
-  transition: all 0.2s ease;
-}
-.action-toggle-btn.btn-active {
-  background: #5F5E5A;
-}
-.queue-drawer {
-  background: #F4F3EF;
-  border-radius: 8px;
-  padding: 14px;
-  border-left: 4px solid #0D2137;
-  display: flex;
-  flex-direction: column;
-  gap: 12px;
-}
-.drawer-title { margin: 0 0 4px 0; font-size: 13px; font-weight: 600; color: #0D2137; text-transform: uppercase; letter-spacing: 0.02em; }
-.form-group { display: flex; flex-direction: column; gap: 6px; }
-.form-label { font-size: 11px; font-weight: 500; color: #5F5E5A; }
-.form-select {
-  padding: 8px;
-  font-size: 13px;
-  border-radius: 6px;
-  border: 0.5px solid rgba(0,0,0,0.15);
-  background: #FFFFFF;
-  color: #1A1A18;
-  outline: none;
-}
-.form-subtext { font-size: 12px; color: #5F5E5A; font-style: italic; }
-.no-trips-warning { font-size: 12px; color: #BA7517; background: #FFF9E6; padding: 6px 10px; border-radius: 4px; }
-.queue-error-banner { display: flex; align-items: center; gap: 8px; background: #FDECEC; color: #D9383A; font-size: 12px; padding: 8px 10px; border-radius: 6px; }
-.submit-queue-btn {
-  width: 100%;
-  background: #1D9E75;
-  color: #FFFFFF;
-  border: none;
-  padding: 10px;
-  border-radius: 6px;
-  font-size: 13px;
-  font-weight: 500;
-  cursor: pointer;
-  transition: background 0.2s ease;
-  margin-top: 6px;
-}
-.submit-queue-btn:disabled {
-  background: rgba(0,0,0,0.08);
-  color: rgba(0,0,0,0.3);
-  cursor: not-allowed;
-}
+.banner { display: flex; align-items: flex-start; gap: 10px; padding: 12px 14px; border-radius: 10px; font-size: 14px; line-height: 1.4; margin-bottom: 16px; }
+.banner svg { flex: none; margin-top: 2px; }
+.banner-ok { background: var(--ok-bg); color: var(--brand); box-shadow: inset 3px 0 0 var(--brand); }
+.banner-danger { background: var(--danger-bg); color: var(--live); box-shadow: inset 3px 0 0 var(--live); margin: 0; }
+.banner-warn { background: var(--warn-bg); color: var(--warn); box-shadow: inset 3px 0 0 var(--warn); margin: 0; }
+.banner-dismiss { margin-left: auto; border: 0; background: none; color: inherit; padding: 0; display: grid; }
+.alert-enter-active, .alert-leave-active { transition: opacity .25s ease, transform .3s var(--ease); }
+.alert-enter-from, .alert-leave-to { opacity: 0; transform: translateY(-8px); }
 
-/* TICKET PASS STATE GRAPHICS */
-.ticket-pass-display { text-align: center; padding: 8px 0; display: flex; flex-direction: column; align-items: center; gap: 8px; }
-.pass-success-badge { background: #E1F5EE; color: #0F6E56; font-size: 11px; font-weight: 600; padding: 2px 10px; border-radius: 999px; text-transform: uppercase; }
-.waitlist-badge { background: #FFF9E6; color: #BA7517; font-size: 11px; font-weight: 600; padding: 2px 10px; border-radius: 999px; text-transform: uppercase; }
-.pass-msg { font-size: 13px; color: #1A1A18; margin: 0; }
-.pass-route-dest { font-size: 13px; color: #0D2137; margin: 0; }
-.pass-route-dest strong { color: #1D9E75; }
-.boarding-code-box {
-  background: #FFFFFF;
-  border: 1.5px dashed #1D9E75;
-  color: #0D2137;
-  font-family: monospace;
-  font-weight: 700;
-  font-size: 26px;
-  letter-spacing: 0.2em;
-  padding: 10px 24px;
-  border-radius: 8px;
-  margin: 6px 0;
-  display: inline-block;
-  box-shadow: 0 2px 4px rgba(0,0,0,0.02);
+.routes-stack { display: grid; gap: 16px; grid-template-columns: minmax(0, 1fr); }
+.skeleton { height: 190px; border-radius: var(--r-md); background: linear-gradient(100deg, var(--surface) 30%, var(--surface-2) 50%, var(--surface) 70%) 0 0 / 200% 100%; animation: shimmer 1.4s linear infinite; }
+@keyframes shimmer { to { background-position: -200% 0; } }
+
+.route-card { min-width: 0; background: var(--surface); border: 1px solid var(--line); border-radius: var(--r-lg); padding: 20px; display: flex; flex-direction: column; gap: 18px; transition: border-color var(--t-fast), transform var(--t-med) var(--ease); }
+.route-card:hover { border-color: var(--brand); }
+.route-main { display: flex; justify-content: space-between; gap: 16px; flex-wrap: wrap; }
+.title-row { display: flex; align-items: center; gap: 12px; flex-wrap: wrap; }
+.route-title { font-size: 24px; font-weight: 700; letter-spacing: -.03em; }
+.route-direction { margin-top: 6px; color: var(--muted); font-size: 13px; }
+.route-meta-list { display: flex; gap: 22px; margin: 0; }
+.route-meta-list dt { font: 500 11px var(--font-mono); letter-spacing: .06em; text-transform: uppercase; color: var(--muted); }
+.route-meta-list dd { margin: 3px 0 0; font: 700 20px var(--font-display); letter-spacing: -.02em; }
+
+/* Stops as a line diagram */
+.stop-line { list-style: none; margin: 0; padding: 4px 0 0; display: flex; gap: 0; overflow-x: auto; scrollbar-width: thin; }
+.stop-line li { position: relative; flex: 0 0 auto; min-width: 104px; padding-top: 22px; padding-right: 12px; font-size: 12px; color: var(--muted); }
+.stop-line li::before { content: ''; position: absolute; top: 6px; left: 6px; right: 0; height: 3px; background: repeating-linear-gradient(90deg, var(--brand) 0 3px, transparent 3px 8px); opacity: .55; }
+.stop-line li:last-child::before { display: none; }
+.stop-line .pin { position: absolute; top: 0; left: 0; width: 14px; height: 14px; border-radius: 50%; background: var(--bg); border: 3px solid var(--brand); transition: transform var(--t-med) var(--ease); }
+.stop-line li.end .pin { background: var(--brand); }
+.stop-line li:hover .pin { transform: scale(1.35); }
+.stop-line li.end .nm { color: var(--ink); font-weight: 600; }
+
+.route-actions { display: flex; margin-top: auto; }
+.title-row .chip { text-transform: none; }
+.action-toggle-btn { width: 100%; }
+@media (min-width: 640px) { .action-toggle-btn { width: auto; } }
+
+/* Queue drawer */
+.queue-drawer { background: var(--bg); border: 1px solid var(--line); border-radius: var(--r-md); padding: 18px; display: flex; flex-direction: column; gap: 18px; transform-origin: top; }
+.drawer-enter-active { animation: drawerIn .38s var(--ease); }
+.drawer-leave-active { transition: opacity .15s ease; }
+.drawer-leave-to { opacity: 0; }
+@keyframes drawerIn { from { opacity: 0; transform: translateY(-8px); clip-path: inset(0 0 100% 0); } to { opacity: 1; transform: none; clip-path: inset(0); } }
+.drawer-title { font-size: 18px; }
+.form-subtext { font-size: 13px; color: var(--muted); }
+.submit-queue-btn { width: 100%; min-height: 46px; margin-top: 4px; }
+
+/* Boarding pass */
+.ticket-pass-display { display: flex; flex-direction: column; align-items: stretch; gap: 14px; }
+.ticket-pass-display > .chip { align-self: flex-start; }
+.pass-msg { font-size: 14px; color: var(--muted); }
+.ticket { position: relative; background: var(--brand); color: var(--on-brand); border-radius: var(--r-md); padding: 22px 20px 18px; text-align: center; animation: ticketIn .55s var(--ease); }
+.ticket.waiting { background: var(--surface-2); color: var(--ink); }
+.ticket::before, .ticket::after { content: ''; position: absolute; top: 58%; width: 18px; height: 18px; border-radius: 50%; background: var(--bg); }
+.ticket::before { left: -9px; } .ticket::after { right: -9px; }
+@keyframes ticketIn { from { opacity: 0; transform: translateY(10px) scale(.97); } to { opacity: 1; transform: none; } }
+.pass-route-dest { display: flex; align-items: center; justify-content: center; gap: 8px; font-size: 14px; opacity: .92; flex-wrap: wrap; }
+.boarding-code-box { font: 500 clamp(34px, 9vw, 46px)/1 var(--font-mono); letter-spacing: .18em; margin: 16px 0 14px; padding-left: .18em; }
+.pass-expiry { font-size: 12px; opacity: .85; padding-top: 14px; border-top: 1.5px dashed currentColor; border-top-color: color-mix(in srgb, currentColor 40%, transparent); }
+.time-countdown { font: 500 15px var(--font-mono); margin-left: 6px; }
+.time-countdown.urgent { color: var(--signal); animation: blink 1s steps(2) infinite; }
+@keyframes blink { 50% { opacity: .45; } }
+.pass-actions { display: flex; align-items: center; justify-content: space-between; gap: 12px; }
+.clear-pass-btn { background: none; border: 0; color: var(--muted); font-size: 13px; text-decoration: underline; padding: 0; }
+
+@media (min-width: 720px) {
+  .page { padding: 40px 32px 48px; }
 }
-.pass-expiry { font-size: 12px; color: #5F5E5A; }
-.time-countdown { font-family: monospace; font-weight: 600; color: #D9383A; }
-.pass-actions { display: flex; gap: 12px; align-items: center; justify-content: center; margin-top: 4px; }
-.clear-pass-btn { background: transparent; border: none; color: #5F5E5A; text-decoration: underline; font-size: 11px; cursor: pointer; }
-.cancel-pass-btn { background: transparent; border: 1px solid #D9383A; color: #D9383A; font-size: 11px; font-weight: 500; padding: 4px 12px; border-radius: 6px; cursor: pointer; transition: all 0.2s ease; }
-.cancel-pass-btn:disabled { opacity: 0.4; cursor: not-allowed; }
-.cancel-pass-btn:hover:not(:disabled) { background: #D9383A; color: #FFFFFF; }
-.proximity-banner { display: flex; align-items: center; gap: 8px; background: #E1F5EE; color: #0F6E56; font-size: 13px; padding: 10px 14px; border-radius: 10px; border: 0.5px solid rgba(29, 158, 117, 0.3); margin-bottom: 12px; }
-.banner-dismiss { margin-left: auto; background: transparent; border: none; color: #0F6E56; cursor: pointer; font-size: 13px; }
+@media (min-width: 1100px) {
+  .routes-stack { grid-template-columns: repeat(2, minmax(0, 1fr)); }
+  .route-card.open { grid-column: 1 / -1; }
+}
 </style>

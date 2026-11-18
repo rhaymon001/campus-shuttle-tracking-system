@@ -1,267 +1,255 @@
 <template>
-  <div class="driver-wrapper">
-    <header class="terminal-header">
-      <div class="brand">
-        <Bus :size="20" class="brand-teal" />
-        <span class="brand-text">DRIVER TERMINAL</span>
+  <div class="driver">
+    <div class="subbar">
+      <div class="who">
+        <span class="status-dot" :class="shiftState"></span>
+        <div class="who-text">
+          <strong>{{ authStore.user?.name || 'Driver' }}</strong>
+          <span class="eyebrow">{{ shiftLabel }}</span>
+        </div>
       </div>
-      <div class="header-meta">
-        <span class="driver-name">{{ authStore.user?.name || 'Driver' }}</span>
-        <button @click="handleLogout" class="logout-link"><LogOut :size="16" /></button>
-      </div>
-    </header>
-
-    <div v-if="broadcastAlert" class="broadcast-banner">
-      <AlertTriangle :size="14" class="icon-spacing" />
-      <span>{{ broadcastAlert }}</span>
-      <button class="banner-dismiss" @click="broadcastAlert = ''"><X :size="14" /></button>
+      <button class="btn btn-ghost btn-sm" @click="isAccountOpen = true"><UserRound :size="15" /> Account</button>
     </div>
 
-    <main class="terminal-content">
-      <section class="settings-panel">
-        <div class="panel-header-label">ACCOUNT SETTINGS</div>
-        <form class="password-form" @submit.prevent="handlePasswordChange">
-          <div class="field-group">
-            <label>Current password</label>
-            <input v-model="passwordForm.currentPassword" type="password" placeholder="Enter current password" />
-          </div>
-          <div class="field-group">
-            <label>New password</label>
-            <input v-model="passwordForm.newPassword" type="password" placeholder="Enter new password" />
-          </div>
-          <div class="field-group">
-            <label>Confirm password</label>
-            <input v-model="passwordForm.confirmPassword" type="password" placeholder="Confirm new password" />
-          </div>
-          <button class="btn btn-primary" type="submit" :disabled="changingPassword || !canSubmitPasswordForm">
-            {{ changingPassword ? 'Updating...' : 'Change Password' }}
-          </button>
-        </form>
-        <p v-if="passwordFeedback" :class="passwordFeedback.type === 'success' ? 'msg-success' : 'msg-error'">
-          {{ passwordFeedback.message }}
-        </p>
-      </section>
+    <Transition name="alert">
+      <div v-if="broadcastAlert" class="broadcast" role="alert">
+        <AlertTriangle :size="16" />
+        <span>{{ broadcastAlert }}</span>
+        <button class="dismiss" aria-label="Dismiss" @click="broadcastAlert = ''"><X :size="16" /></button>
+      </div>
+    </Transition>
 
-      <div v-if="loading" class="loading-state">Checking for an active shift loop...</div>
+    <main class="stage">
+      <div v-if="loading" class="skeletons"><div class="skeleton"></div><div class="skeleton short"></div></div>
 
       <!-- ================= SETUP MODE ================= -->
-      <section v-else-if="!activeTrip && !layoverData" class="setup-card">
-        <h2>Begin Shift Loop</h2>
-        <p class="subtitle">Select the physical vehicle you are driving today and your assigned route.</p>
+      <section v-else-if="!activeTrip && !layoverData" class="card narrow setup rise">
+        <p class="eyebrow">Off shift</p>
+        <h1>Start your shift</h1>
+        <p class="lede">Choose the vehicle you’re driving today and your route loop.</p>
 
-        <div v-if="setupError" class="alert-banner danger-alert">
-          <AlertTriangle :size="16" class="icon-spacing" />
-          <span>{{ setupError }}</span>
-        </div>
-
-        <div class="form-group">
-          <label>Shuttle Vehicle</label>
-          <select v-model="selectedShuttleId">
-            <option disabled value="">— Select an available vehicle —</option>
-            <option v-for="s in availableShuttles" :key="s._id" :value="s._id">
-              {{ s.plateNumber }} ({{ s.model || 'N/A' }} · {{ s.capacity }} seats)
-            </option>
+        <label class="field">
+          <span>Vehicle</span>
+          <select v-model="selectedShuttleId" class="select">
+            <option disabled value="">Select an available vehicle</option>
+            <option v-for="s in availableShuttles" :key="s._id" :value="s._id">{{ s.plateNumber }} ({{ s.model || 'N/A' }} · {{ s.capacity }} seats)</option>
           </select>
-        </div>
+        </label>
 
-        <div class="form-group">
-          <label>Campus Route</label>
-          <select v-model="selectedRouteId">
-            <option disabled value="">— Select your route loop —</option>
-            <option v-for="r in routes" :key="r._id" :value="r._id">
-              {{ r.name }} — {{ r.direction }}
-            </option>
+        <label class="field">
+          <span>Route</span>
+          <select v-model="selectedRouteId" class="select">
+            <option disabled value="">Select your route loop</option>
+            <option v-for="r in routes" :key="r._id" :value="r._id">{{ r.name }} · {{ r.direction }}</option>
           </select>
-        </div>
+        </label>
 
-        <button class="btn btn-primary" :disabled="!selectedShuttleId || !selectedRouteId || starting" @click="handleStartTrip">
-          <Loader2 v-if="starting" :size="16" class="animate-spin icon-spacing" />
-          <Play v-else :size="16" class="icon-spacing" />
-          <span>{{ starting ? 'Initializing...' : 'Start Trip' }}</span>
+        <button class="btn start" :disabled="!selectedShuttleId || !selectedRouteId || starting" @click="handleStartTrip">
+          <Loader2 v-if="starting" :size="18" class="spin" />
+          <Play v-else :size="18" />
+          <span>{{ starting ? 'Starting…' : 'Start trip' }}</span>
         </button>
       </section>
 
       <!-- ================= LAYOVER (AUTO-TURNAROUND) ================= -->
-      <section v-else-if="layoverData" class="layover-card">
-        <div class="layover-icon">⏸</div>
-        <h2>Layover at Terminus</h2>
-        <p class="subtitle">
-          Forward trip completed. The return leg on
-          <strong class="layover-route-name">{{ layoverData.reverseRoute?.name || 'return route' }}</strong>
-          is armed — it starts automatically the moment the bus pulls away.
-        </p>
-        <div class="layover-bus-info">
-          <span class="shuttle-code">{{ layoverData.shuttle?.plateNumber || 'SHUTTLE' }}</span>
-          <span class="van-muted">{{ layoverData.shuttle?.model || '' }}</span>
+      <section v-else-if="layoverData" class="narrow layover">
+        <div class="card rise">
+          <span class="layover-ico"><Pause :size="22" /></span>
+          <h1>Layover at terminus</h1>
+          <p class="lede">
+            Forward trip completed. The return leg on
+            <strong>{{ layoverData.reverseRoute?.name || 'the return route' }}</strong>
+            is armed. It starts automatically the moment the bus pulls away.
+          </p>
+          <div class="bus-info">
+            <span class="plate small">{{ layoverData.shuttle?.plateNumber || 'SHUTTLE' }}</span>
+            <span class="muted">{{ layoverData.shuttle?.model || '' }}</span>
+          </div>
         </div>
 
-        <!-- Keep streaming during the layover so the departure is detected -->
-        <section class="panel-card manual-sim-card">
-          <div class="panel-header-label">VEHICLE POSITION SOURCE</div>
-          <div class="manual-sim-row">
-            <button class="manual-toggle" :class="{ 'manual-on': manualMode }" @click="toggleManualMode">
-              {{ manualMode ? 'Manual Position: ON' : 'Manual Position: OFF' }}
+        <section class="card position rise" style="--i:3">
+          <div class="pos-head">
+            <div>
+              <p class="eyebrow">Position source</p>
+              <p class="pos-note">{{ manualMode ? (layoverData ? 'Keep piping fixes. Departure is auto-detected.' : 'Streaming a simulated fix every 3s') : 'Using device GPS' }}</p>
+            </div>
+            <button class="switch" :class="{ on: manualMode }" role="switch" :aria-checked="manualMode" aria-label="Manual position" @click="toggleManualMode">
+              <span class="knob"></span><span class="switch-label">{{ manualMode ? 'Manual' : 'GPS' }}</span>
             </button>
-            <span class="manual-sim-note">Keep piping fixes — departure is auto-detected.</span>
           </div>
 
-          <div v-if="manualMode" class="manual-sim-body">
-            <div v-if="simStops.length" class="manual-stop-block">
-              <label class="manual-label">Return-leg simulated stop</label>
-              <select v-model.number="manualStopIndex" class="manual-select" @change="selectSimStop">
-                <option v-for="(stop, i) in simStops" :key="stop.index" :value="i">
-                  {{ i }}. {{ stop.name }}
-                </option>
-              </select>
-              <button class="advance-btn" @click="advanceManualStop">▶ Advance to next stop</button>
-              <p class="manual-hint">
-                {{ simStops[manualStopIndex]?.name }}
-                ({{ simStops[manualStopIndex]?.lat }}, {{ simStops[manualStopIndex]?.lng }})
-              </p>
+          <Transition name="reveal">
+            <div v-if="manualMode" class="manual">
+              <div v-if="simStops.length" class="manual-block">
+                <label class="field">
+                  <span>{{ layoverData ? 'Return-leg simulated stop' : 'Current simulated stop' }}</span>
+                  <select v-model.number="manualStopIndex" class="select" @change="selectSimStop">
+                    <option v-for="(stop, i) in simStops" :key="stop.index" :value="i">{{ i }}. {{ stop.name }}</option>
+                  </select>
+                </label>
+                <button class="btn btn-ghost advance" @click="advanceManualStop"><Play :size="14" /> Advance to next stop</button>
+                <p class="coords tnum">{{ simStops[manualStopIndex]?.name }} · {{ simStops[manualStopIndex]?.lat }}, {{ simStops[manualStopIndex]?.lng }}</p>
+              </div>
+              <div v-else class="manual-block">
+                <span class="field-label">Manual coordinates</span>
+                <div class="coord-row">
+                  <input v-model="manualLat" class="input" placeholder="Latitude (11.15745)" />
+                  <input v-model="manualLng" class="input" placeholder="Longitude (7.65272)" />
+                </div>
+              </div>
             </div>
-          </div>
+          </Transition>
         </section>
 
-        <div class="layover-actions">
+        <section class="card end rise" style="--i:4">
+          <div>
+            <p class="eyebrow">End shift</p>
+            <p class="muted">Ending now cancels the auto-return and releases the shuttle.</p>
+          </div>
           <button class="btn btn-danger" :disabled="endingLayover" @click="handleEndLayover">
-            <Loader2 v-if="endingLayover" :size="16" class="animate-spin icon-spacing" />
-            <Square v-else :size="16" class="icon-spacing" />
-            <span>{{ endingLayover ? 'Ending shift...' : 'End Shift Now' }}</span>
+            <Loader2 v-if="endingLayover" :size="16" class="spin" />
+            <Square v-else :size="16" />
+            <span>{{ endingLayover ? 'Ending…' : 'End shift now' }}</span>
           </button>
-          <p class="subtitle">Ending now cancels the auto-return and releases the shuttle.</p>
-        </div>
+        </section>
       </section>
 
       <!-- ================= ACTIVE MODE ================= -->
       <template v-else>
-        <section class="trip-banner-card">
-          <div class="trip-identity">
-            <span class="shuttle-code">{{ activeTrip.shuttleId?.plateNumber || 'SHUTTLE' }}</span>
-            <span class="route-name">{{ activeTrip.routeId?.name }} — {{ activeTrip.routeId?.direction }}</span>
+        <section class="hero rise">
+          <div class="hero-main">
+            <span class="plate">{{ activeTrip.shuttleId?.plateNumber || 'SHUTTLE' }}</span>
+            <span class="hero-route">{{ activeTrip.routeId?.name }} · {{ activeTrip.routeId?.direction }}</span>
           </div>
-          <div class="status-pills">
-            <span class="pill" :class="gpsPillClass">
-              <Satellite :size="12" class="icon-spacing" /> {{ gpsStatusLabel }}
-            </span>
-            <span class="pill" :class="connected ? 'pill-teal' : 'pill-amber'">
-              <Wifi :size="12" class="icon-spacing" /> {{ connected ? 'Link Live' : 'REST Fallback' }}
-            </span>
+          <div class="pills">
+            <span class="pill" :class="gpsPillClass"><Satellite :size="13" /> {{ gpsStatusLabel }}</span>
+            <span class="pill" :class="connected ? 'pill-teal' : 'pill-amber'"><Wifi :size="13" /> {{ connected ? 'Link live' : 'REST fallback' }}</span>
           </div>
         </section>
 
-        <!-- Manual position simulator: laptops have no GPS fix, so the bus would
-             never render on the student map without this -->
-        <section class="panel-card manual-sim-card">
-          <div class="panel-header-label">VEHICLE POSITION SOURCE</div>
-          <div class="manual-sim-row">
-            <button class="manual-toggle" :class="{ 'manual-on': manualMode }" @click="toggleManualMode">
-              {{ manualMode ? 'Manual Position: ON' : 'Manual Position: OFF' }}
-            </button>
-            <span class="manual-sim-note">
-              {{ manualMode ? 'Streaming a simulated fix every 3s' : 'Using device GPS' }}
-            </span>
-          </div>
-
-          <div v-if="manualMode" class="manual-sim-body">
-            <div v-if="simStops.length" class="manual-stop-block">
-              <label class="manual-label">Current simulated stop</label>
-              <select v-model.number="manualStopIndex" class="manual-select" @change="selectSimStop">
-                <option v-for="(stop, i) in simStops" :key="stop.index" :value="i">
-                  {{ i }}. {{ stop.name }}
-                </option>
-              </select>
-              <button class="advance-btn" @click="advanceManualStop">
-                ▶ Advance to next stop
-              </button>
-              <p class="manual-hint">
-                {{ simStops[manualStopIndex]?.name }}
-                ({{ simStops[manualStopIndex]?.lat }}, {{ simStops[manualStopIndex]?.lng }})
-              </p>
-            </div>
-
-            <div v-else class="manual-stop-block">
-              <label class="manual-label">Manual coordinates</label>
-              <div class="manual-coord-row">
-                <input v-model="manualLat" class="manual-input" placeholder="Latitude (11.15745)" />
-                <input v-model="manualLng" class="manual-input" placeholder="Longitude (7.65272)" />
+        <div class="grid">
+          <!-- Read-only manifest: occupancy only moves via confirmed boarding and the automatic alight sweep -->
+          <section class="card load rise" style="--i:1">
+            <div class="load-head">
+              <div>
+                <p class="eyebrow">Load ahead</p>
+                <p class="onboard"><RollNumber :value="manifest?.onboard ?? occupancy" /><span class="of">on board<template v-if="activeTrip.seatsTotal"> of {{ activeTrip.seatsTotal }} seats</template></span></p>
               </div>
             </div>
-          </div>
-        </section>
+            <div class="bar"><div class="fill" :class="occupancyFillClass" :style="{ width: occupancyPct + '%' }"></div></div>
 
-        <section class="panel-grid">
-          <!-- Load-ahead manifest — read-only, derived from the seat registry.
-             No manual +/− here: occupancy moves only via confirmed boarding and
-             the automatic alight sweep as destinations slip behind the bus. -->
-          <div class="panel-card">
-            <div class="panel-header-label">LOAD AHEAD — {{ manifest?.onboard ?? occupancy }} on board</div>
-            <div class="occupancy-bar-track">
-              <div class="occupancy-fill" :class="occupancyFillClass" :style="{ width: occupancyPct + '%' }"></div>
-            </div>
-            <div v-if="manifest" class="manifest-stops">
-              <div
-                v-for="stop in manifest.perStop"
-                :key="stop.index"
-                class="manifest-row"
-                :class="{ 'manifest-passed': stop.index <= manifest.lastPassedIndex }"
-              >
-                <span class="manifest-name">{{ stop.name }}</span>
-                <span class="manifest-counts">
-                  <span v-if="stop.pendingBoarding" class="count-chip chip-board">{{ stop.pendingBoarding }} board</span>
-                  <span v-if="stop.waitlisted" class="count-chip chip-wait">{{ stop.waitlisted }} wait</span>
-                  <span v-if="stop.dropoffs" class="count-chip chip-off">{{ stop.dropoffs }} off</span>
-                  <span v-if="!stop.pendingBoarding && !stop.waitlisted && !stop.dropoffs" class="count-none">—</span>
+            <ol v-if="manifest" class="stops">
+              <li v-for="stop in manifest.perStop" :key="stop.index" :class="{ passed: stop.index <= manifest.lastPassedIndex }">
+                <span class="node"><Check v-if="stop.index <= manifest.lastPassedIndex" :size="10" /></span>
+                <span class="stop-name">{{ stop.name }}</span>
+                <span class="counts">
+                  <span v-if="stop.pendingBoarding" class="count board">{{ stop.pendingBoarding }} board</span>
+                  <span v-if="stop.waitlisted" class="count wait">{{ stop.waitlisted }} wait</span>
+                  <span v-if="stop.dropoffs" class="count off">{{ stop.dropoffs }} off</span>
                 </span>
-              </div>
-            </div>
-            <p v-else class="feedback-msg">Loading load-ahead manifest...</p>
-          </div>
+              </li>
+            </ol>
+            <p v-else class="muted">Loading load-ahead manifest…</p>
+          </section>
 
-          <!-- Boarding pass confirmation -->
-          <div class="panel-card">
-            <div class="panel-header-label">CONFIRM BOARDING PASS</div>
-            <div class="code-entry-row">
+          <div class="col">
+            <section class="card board rise" style="--i:2">
+              <p class="eyebrow">Confirm boarding pass</p>
               <input
                 v-model="boardingCode"
                 maxlength="6"
-                placeholder="6-CHAR CODE"
+                placeholder="CODE"
                 class="code-input"
+                autocapitalize="characters"
+                autocomplete="off"
+                autocorrect="off"
+                spellcheck="false"
+                aria-label="6-character boarding code"
                 @keyup.enter="confirmBoarding"
               />
-              <button class="btn btn-primary btn-compact" :disabled="boardingCode.length !== 6 || confirming" @click="confirmBoarding">
-                <Loader2 v-if="confirming" :size="14" class="animate-spin" />
-                <span v-else>Confirm</span>
+              <button class="btn confirm" :disabled="boardingCode.length !== 6 || confirming" @click="confirmBoarding">
+                <Loader2 v-if="confirming" :size="16" class="spin" />
+                <Check v-else :size="16" />
+                <span>{{ confirming ? 'Checking…' : 'Confirm boarding' }}</span>
               </button>
-            </div>
-            <p v-if="boardingMessage" class="feedback-msg" :class="boardingSuccess ? 'msg-good' : 'msg-bad'">
-              {{ boardingMessage }}
-            </p>
-          </div>
-        </section>
+            </section>
 
-        <!-- End trip -->
-        <section class="panel-card end-trip-card">
-          <div>
-            <div class="panel-header-label">SHIFT TERMINATION</div>
-            <p class="subtitle">Ends the loop, clears GPS streaming, and releases the vehicle back to the fleet pool.</p>
+<section class="card position rise" style="--i:3">
+              <div class="pos-head">
+                <div>
+                  <p class="eyebrow">Position source</p>
+                  <p class="pos-note">{{ manualMode ? (layoverData ? 'Keep piping fixes. Departure is auto-detected.' : 'Streaming a simulated fix every 3s') : 'Using device GPS' }}</p>
+                </div>
+                <button class="switch" :class="{ on: manualMode }" role="switch" :aria-checked="manualMode" aria-label="Manual position" @click="toggleManualMode">
+                  <span class="knob"></span><span class="switch-label">{{ manualMode ? 'Manual' : 'GPS' }}</span>
+                </button>
+              </div>
+
+              <Transition name="reveal">
+                <div v-if="manualMode" class="manual">
+                  <div v-if="simStops.length" class="manual-block">
+                    <label class="field">
+                      <span>{{ layoverData ? 'Return-leg simulated stop' : 'Current simulated stop' }}</span>
+                      <select v-model.number="manualStopIndex" class="select" @change="selectSimStop">
+                        <option v-for="(stop, i) in simStops" :key="stop.index" :value="i">{{ i }}. {{ stop.name }}</option>
+                      </select>
+                    </label>
+                    <button class="btn btn-ghost advance" @click="advanceManualStop"><Play :size="14" /> Advance to next stop</button>
+                    <p class="coords tnum">{{ simStops[manualStopIndex]?.name }} · {{ simStops[manualStopIndex]?.lat }}, {{ simStops[manualStopIndex]?.lng }}</p>
+                  </div>
+                  <div v-else class="manual-block">
+                    <span class="field-label">Manual coordinates</span>
+                    <div class="coord-row">
+                      <input v-model="manualLat" class="input" placeholder="Latitude (11.15745)" />
+                      <input v-model="manualLng" class="input" placeholder="Longitude (7.65272)" />
+                    </div>
+                  </div>
+                </div>
+              </Transition>
+            </section>
+
+            <section class="card end rise" style="--i:4">
+              <div>
+                <p class="eyebrow">End shift</p>
+                <p class="muted">Ends the loop, stops GPS streaming, and releases the vehicle.</p>
+              </div>
+              <button class="btn btn-danger" :disabled="ending" @click="handleEndTrip">
+                <Loader2 v-if="ending" :size="16" class="spin" />
+                <Square v-else :size="16" />
+                <span>{{ ending ? 'Ending…' : 'End trip' }}</span>
+              </button>
+            </section>
           </div>
-          <button class="btn btn-danger" :disabled="ending" @click="handleEndTrip">
-            <Loader2 v-if="ending" :size="16" class="animate-spin icon-spacing" />
-            <Square v-else :size="16" class="icon-spacing" />
-            <span>{{ ending ? 'Terminating...' : 'End Trip' }}</span>
-          </button>
-        </section>
+        </div>
       </template>
     </main>
+
+    <AccountSheet
+      :open="isAccountOpen"
+      :name="authStore.user?.name || ''"
+      :role="authStore.user?.role || 'driver'"
+      :form="passwordForm"
+      :feedback="passwordFeedback"
+      :changing="changingPassword"
+      :can-submit="!!canSubmitPasswordForm"
+      @close="isAccountOpen = false"
+      @submit="handlePasswordChange"
+      @logout="handleLogout"
+    />
   </div>
 </template>
 
 <script setup>
-import { ref, computed, onMounted, onUnmounted, reactive } from 'vue';
+import { ref, computed, onMounted, onUnmounted, reactive, watch } from 'vue';
 import { useRouter } from 'vue-router';
 import {
-  Bus, LogOut, Play, Square, Satellite, Wifi, AlertTriangle, Loader2, X
+  Bus, LogOut, Play, Square, Satellite, Wifi, AlertTriangle, Loader2, X, Pause, UserRound, Check
 } from 'lucide-vue-next';
+import RollNumber from '../components/RollNumber.vue';
+import AccountSheet from '../components/AccountSheet.vue';
+import { useToast } from '../composables/useToast';
+import { useConfirm } from '../composables/useConfirm';
+import { locationUnavailableReason, explainLocationError } from '../utils/locationErrors';
 import apiClient from '../api/axios';
 import { useAuthStore } from '../stores/auth';
 import { useShuttleSocket } from '../composables/useShuttleSocket';
@@ -311,7 +299,8 @@ const canSubmitPasswordForm = computed(() => {
     passwordForm.newPassword &&
     passwordForm.confirmPassword &&
     passwordForm.newPassword.length >= 6 &&
-    passwordForm.newPassword === passwordForm.confirmPassword;
+    passwordForm.newPassword === passwordForm.confirmPassword &&
+    passwordForm.newPassword !== passwordForm.currentPassword;
 });
 
 const handlePasswordChange = async () => {
@@ -365,7 +354,7 @@ const simStops = computed(() =>
 const gpsStatusLabel = computed(() => {
   if (manualMode.value) return 'Manual Sim';
   if (gpsStatus.value === 'live') return 'GPS Live';
-  if (gpsStatus.value === 'error') return `GPS Error: ${gpsError.value}`;
+  if (gpsStatus.value === 'error') return 'GPS problem';
   return 'GPS Standby';
 });
 const gpsPillClass = computed(() => {
@@ -461,7 +450,8 @@ const handleStartTrip = async () => {
 };
 
 const handleEndTrip = async () => {
-  if (!confirm('End this trip? The shuttle will disappear from all live maps.')) return;
+  const ok = await askConfirm({ title: 'End this trip?', message: 'The shuttle will disappear from all live maps.', confirmLabel: 'End trip', danger: true });
+  if (!ok) return;
   ending.value = true;
   try {
     await apiClient.patch(`/trips/end/${activeTrip.value._id}`);
@@ -478,7 +468,7 @@ const handleEndTrip = async () => {
     selectedRouteId.value = '';
     await fetchSetupOptions();
   } catch (err) {
-    alert(err.response?.data?.message || 'Failed to end trip.');
+    toast.error(err.response?.data?.message || 'Failed to end trip.');
   } finally {
     ending.value = false;
   }
@@ -487,7 +477,8 @@ const handleEndTrip = async () => {
 // Auto-turnaround: the driver chose to conclude the shift while parked at a
 // terminus, cancelling the queued return leg instead of letting it auto-start.
 const handleEndLayover = async () => {
-  if (!confirm('End the shift now? The auto-turnaround return leg will be cancelled.')) return;
+  const ok = await askConfirm({ title: 'End the shift now?', message: 'The auto-turnaround return leg will be cancelled and the shuttle released.', confirmLabel: 'End shift', danger: true });
+  if (!ok) return;
   endingLayover.value = true;
   try {
     await apiClient.post('/trips/layover/end');
@@ -497,7 +488,7 @@ const handleEndLayover = async () => {
     currentTripId.value = null;
     await fetchSetupOptions();
   } catch (err) {
-    alert(err.response?.data?.message || 'Failed to end layover.');
+    toast.error(err.response?.data?.message || 'Failed to end layover.');
   } finally {
     endingLayover.value = false;
   }
@@ -506,9 +497,10 @@ const handleEndLayover = async () => {
 // ---------- GPS streaming ----------
 
 const startGpsStream = () => {
-  if (!('geolocation' in navigator)) {
+  const unavailable = locationUnavailableReason(); // no GPS support, or not https/localhost
+  if (unavailable) {
     gpsStatus.value = 'error';
-    gpsError.value = 'Geolocation unsupported';
+    gpsError.value = unavailable;
     return;
   }
   if (watchId !== null) return;
@@ -532,8 +524,11 @@ const startGpsStream = () => {
       }
     },
     (err) => {
-      gpsStatus.value = 'error';
-      gpsError.value = err.message;
+      // A refusal is always a problem; a hiccup after a good fix is not
+      if (err.code === 1 || gpsStatus.value !== 'live') {
+        gpsStatus.value = 'error';
+        gpsError.value = explainLocationError(err);
+      }
     },
     { enableHighAccuracy: true, maximumAge: 0 }
   );
@@ -706,141 +701,132 @@ onUnmounted(() => {
   stopManualStream();
   stopManifestPoll();
 });
+
+// ---- Redesign additions: toasts, in-app confirm, account sheet, shift status ----
+const toast = useToast();
+const { ask: askConfirm } = useConfirm();
+
+// Page-level errors appear at the top of the screen instead of inside the cards
+watch(setupError, (message) => { if (message) toast.error(message); });
+watch(boardingMessage, (message) => {
+  if (!message) return;
+  if (boardingSuccess.value) toast.success(message); else toast.error(message);
+});
+watch(gpsError, (message) => { if (message && !manualMode.value) toast.error(message); });
+
+const isAccountOpen = ref(false);
+const shiftState = computed(() => (layoverData.value ? 'layover' : activeTrip.value ? 'live' : 'off'));
+const shiftLabel = computed(() => ({ layover: 'Layover', live: 'On shift', off: 'Off shift' }[shiftState.value]));
 </script>
 
 <style scoped>
-.driver-wrapper { display: flex; flex-direction: column; min-height: 100vh; width: 100vw; box-sizing: border-box; background: #F4F3EF; }
-.terminal-header { display: flex; align-items: center; justify-content: space-between; height: 56px; background: #0D2137; color: #FFFFFF; padding: 0 16px; box-sizing: border-box; border-bottom: 0.5px solid rgba(255, 255, 255, 0.1); position: sticky; top: 0; z-index: 100; }
-.brand { display: flex; align-items: center; gap: 8px; }
-.brand-teal { color: #1D9E75; }
-.brand-text { font-size: 15px; font-weight: 500; letter-spacing: 0.05em; }
-.header-meta { display: flex; align-items: center; gap: 12px; }
-.driver-name { font-size: 13px; color: rgba(255,255,255,0.8); }
-.logout-link { background: transparent; border: none; color: #E24B4A; cursor: pointer; display: flex; padding: 4px; }
+.driver { min-height: calc(100dvh - var(--header-h) - var(--safe-t)); padding-bottom: calc(24px + var(--safe-b)); }
 
-.broadcast-banner { display: flex; align-items: center; gap: 8px; background: #FFF9E6; color: #BA7517; font-size: 13px; padding: 10px 16px; border-bottom: 0.5px solid rgba(186, 117, 23, 0.3); }
-.banner-dismiss { margin-left: auto; background: transparent; border: none; color: #BA7517; cursor: pointer; display: flex; padding: 2px; }
+/* sticky sub-bar under the app header */
+.subbar { position: sticky; top: calc(var(--header-h) + var(--safe-t)); z-index: 300; display: flex; align-items: center; justify-content: space-between; gap: 12px; padding: 10px 16px; background: var(--bg); border-bottom: 1px solid var(--line); }
+.who { display: flex; align-items: center; gap: 12px; min-width: 0; }
+.who-text { display: flex; flex-direction: column; gap: 4px; min-width: 0; }
+.who-text strong { font: 700 16px/1 var(--font-display); letter-spacing: -.01em; white-space: nowrap; overflow: hidden; text-overflow: ellipsis; }
+.status-dot { flex: none; width: 12px; height: 12px; border-radius: 50%; background: var(--stale); }
+.status-dot.live { background: var(--brand); box-shadow: 0 0 0 0 color-mix(in srgb, var(--brand) 60%, transparent); animation: ping 1.8s ease-out infinite; }
+.status-dot.layover { background: var(--signal); }
+@keyframes ping { to { box-shadow: 0 0 0 10px transparent; } }
 
-.terminal-content { flex: 1; padding: 16px; box-sizing: border-box; display: flex; flex-direction: column; gap: 16px; max-width: 860px; width: 100%; margin: 0 auto; }
-.loading-state { font-size: 13px; color: #5F5E5A; text-align: center; padding: 40px 0; font-style: italic; }
+.broadcast { display: flex; align-items: flex-start; gap: 10px; margin: 12px 16px 0; padding: 12px 14px; border-radius: 10px; background: var(--warn-bg); color: var(--warn); box-shadow: inset 3px 0 0 var(--warn); font-size: 14px; line-height: 1.4; }
+.broadcast svg { flex: none; margin-top: 2px; }
+.dismiss { margin-left: auto; border: 0; background: none; color: inherit; padding: 0; display: grid; }
+.alert-enter-active, .alert-leave-active { transition: opacity .25s ease, transform .3s var(--ease); }
+.alert-enter-from, .alert-leave-to { opacity: 0; transform: translateY(-8px); }
 
-.setup-card { background: #FFFFFF; border: 0.5px solid rgba(0, 0, 0, 0.10); border-radius: 12px; padding: 24px; display: flex; flex-direction: column; gap: 14px; max-width: 480px; margin: 24px auto 0; width: 100%; box-sizing: border-box; }
-.setup-card h2 { font-size: 18px; font-weight: 500; margin: 0; }
-.subtitle { font-size: 13px; color: #5F5E5A; margin: 0; line-height: 1.5; }
+.stage { max-width: 1040px; margin: 0 auto; padding: 16px; display: flex; flex-direction: column; gap: 16px; }
+.narrow { width: 100%; max-width: 520px; margin: 0 auto; }
+.card { background: var(--surface); border: 1px solid var(--line); border-radius: var(--r-lg); padding: 20px; display: flex; flex-direction: column; gap: 14px; min-width: 0; }
+h1 { font-size: clamp(32px, 7vw, 44px); font-weight: 700; letter-spacing: -.04em; }
+.lede { color: var(--muted); }
+.muted { color: var(--muted); font-size: 14px; }
+.field-label { font: 600 12px var(--font-body); color: var(--muted); }
 
-.form-group { display: flex; flex-direction: column; gap: 6px; }
-.form-group label { font-size: 12px; font-weight: 500; text-transform: uppercase; color: #5F5E5A; }
-.form-group select { height: 40px; border: 0.5px solid rgba(0, 0, 0, 0.2); border-radius: 8px; padding: 0 10px; font-size: 14px; background: #F4F3EF; color: #1A1A18; }
+.skeletons { display: grid; gap: 14px; max-width: 520px; width: 100%; margin: 0 auto; }
+.skeleton { height: 220px; border-radius: var(--r-lg); background: linear-gradient(100deg, var(--surface) 30%, var(--surface-2) 50%, var(--surface) 70%) 0 0 / 200% 100%; animation: shimmer 1.4s linear infinite; }
+.skeleton.short { height: 120px; }
+@keyframes shimmer { to { background-position: -200% 0; } }
 
-.alert-banner { display: flex; align-items: center; gap: 8px; font-size: 13px; padding: 10px 12px; border-radius: 8px; }
-.danger-alert { background: #FDECEC; color: #D9383A; }
-
-.btn { display: flex; align-items: center; justify-content: center; gap: 6px; height: 42px; border-radius: 8px; border: none; font-size: 14px; font-weight: 500; cursor: pointer; padding: 0 18px; }
-.btn:disabled { opacity: 0.55; cursor: not-allowed; }
-.btn-primary { background: #1D9E75; color: #FFFFFF; }
-.btn-danger { background: #D9383A; color: #FFFFFF; }
-.btn-compact { height: 38px; padding: 0 14px; font-size: 13px; }
-.icon-spacing { margin-right: 4px; }
-.animate-spin { animation: spin 1s linear infinite; }
+.start { width: 100%; min-height: 54px; font-size: 16px; margin-top: 4px; }
+.spin { animation: spin 1s linear infinite; }
 @keyframes spin { to { transform: rotate(360deg); } }
 
-.trip-banner-card { background: #0D2137; color: #FFFFFF; border-radius: 12px; padding: 16px; display: flex; flex-direction: column; gap: 12px; }
-.trip-identity { display: flex; flex-direction: column; gap: 2px; }
-.shuttle-code { font-family: monospace; font-weight: 600; font-size: 16px; letter-spacing: 0.15em; color: #1D9E75; }
-.route-name { font-size: 13px; color: rgba(255, 255, 255, 0.75); }
-.status-pills { display: flex; gap: 8px; flex-wrap: wrap; }
-.pill { display: flex; align-items: center; font-size: 11px; font-weight: 500; padding: 3px 10px; border-radius: 999px; }
-.pill-teal { background: #E1F5EE; color: #0F6E56; }
-.pill-amber { background: #FFF9E6; color: #BA7517; }
-.pill-red { background: #FDECEC; color: #D9383A; }
+/* active trip hero */
+.hero { background: var(--header-bg); color: var(--header-ink); border-radius: var(--r-lg); padding: 20px; display: flex; flex-direction: column; gap: 16px; border: 1px solid color-mix(in srgb, var(--header-ink) 14%, transparent); }
+.hero-main { display: flex; flex-direction: column; gap: 6px; }
+.plate { font: 500 clamp(30px, 8vw, 44px)/1 var(--font-mono); letter-spacing: .06em; }
+.plate.small { font-size: 22px; }
+.hero-route { font-size: 15px; opacity: .85; }
+.pills { display: flex; flex-wrap: wrap; gap: 8px; }
+.pill { display: inline-flex; align-items: center; gap: 6px; font: 600 12px var(--font-body); padding: 7px 11px; border-radius: 99px; background: rgb(255 255 255 / .16); color: inherit; transition: background var(--t-med), color var(--t-med); }
+.pill-teal { background: var(--header-ink); color: var(--header-bg); }
+.pill-amber { background: var(--signal); color: var(--on-signal); }
+.pill-red { background: var(--live); color: #fff; }
 
-.panel-grid { display: flex; flex-direction: column; gap: 16px; }
-.panel-card { background: #FFFFFF; border: 0.5px solid rgba(0, 0, 0, 0.10); border-radius: 12px; padding: 16px; box-sizing: border-box; }
-.panel-header-label { font-size: 11px; font-weight: 500; text-transform: uppercase; color: #5F5E5A; padding-bottom: 6px; border-bottom: 0.5px solid rgba(0, 0, 0, 0.1); margin-bottom: 12px; }
+.grid { display: grid; gap: 16px; grid-template-columns: minmax(0, 1fr); align-items: start; }
+.col { display: flex; flex-direction: column; gap: 16px; min-width: 0; }
 
-.occupancy-readout { text-align: center; }
-.occupancy-value { font-size: 34px; font-weight: 600; color: #1A1A18; }
-.occupancy-max { font-size: 13px; color: #5F5E5A; margin-left: 4px; }
-.occupancy-bar-track { height: 6px; background: #F4F3EF; border-radius: 999px; overflow: hidden; }
-.occupancy-fill { height: 100%; border-radius: 999px; transition: width 0.4s ease, background-color 0.3s ease; }
-.teal-fill { background: #1D9E75; }
-.warning-fill { background: #BA7517; }
-.danger-fill { background: #D9383A; }
+/* load ahead */
+.onboard { display: flex; align-items: baseline; gap: 10px; margin-top: 8px; font: 700 52px/1 var(--font-display); letter-spacing: -.04em; }
+.onboard .of { font: 500 14px var(--font-body); letter-spacing: 0; color: var(--muted); }
+.bar { height: 10px; border-radius: 99px; background: var(--surface-2); overflow: hidden; }
+.fill { height: 100%; border-radius: 99px; transition: width .9s var(--ease), background var(--t-med); }
+.teal-fill { background: var(--brand); }
+.warning-fill { background: var(--signal); }
+.danger-fill { background: var(--live); }
+.stops { list-style: none; margin: 4px 0 0; padding: 0; display: flex; flex-direction: column; }
+.stops li { position: relative; display: flex; align-items: center; justify-content: space-between; gap: 10px; padding: 10px 0 10px 28px; font-size: 14px; border-top: 1px solid var(--line); }
+.stops li:first-child { border-top: 0; }
+.node { position: absolute; left: 0; top: 50%; width: 16px; height: 16px; margin-top: -8px; border-radius: 50%; border: 3px solid var(--brand); background: var(--bg); display: grid; place-items: center; color: var(--on-brand); transition: background var(--t-med), border-color var(--t-med); }
+.stops li.passed { color: var(--muted); }
+.stops li.passed .node { background: var(--stale); border-color: var(--stale); }
+.counts { display: flex; flex-wrap: wrap; gap: 6px; justify-content: flex-end; }
+.count { font: 500 11px var(--font-mono); padding: 4px 8px; border-radius: 99px; }
+.count.board { background: var(--ok-bg); color: var(--brand); }
+.count.wait { background: var(--warn-bg); color: var(--warn); }
+.count.off { background: var(--surface-2); color: var(--muted); }
 
-.code-entry-row { display: flex; gap: 8px; }
-.code-input { flex: 1; height: 38px; border: 0.5px solid rgba(0, 0, 0, 0.2); border-radius: 8px; padding: 0 12px; font-family: monospace; font-size: 15px; letter-spacing: 0.25em; text-transform: uppercase; background: #F4F3EF; color: #1A1A18; box-sizing: border-box; min-width: 0; }
-.feedback-msg { font-size: 12px; margin: 8px 0 0 0; }
-.msg-good { color: #0F6E56; }
-.msg-bad { color: #D9383A; }
+/* boarding code */
+.code-input { width: 100%; min-height: 68px; text-align: center; text-transform: uppercase; font: 500 34px var(--font-mono); letter-spacing: .3em; padding-left: .3em; color: var(--ink); background: var(--bg); border: 2px solid var(--line); border-radius: var(--r-md); transition: border-color var(--t-fast), box-shadow var(--t-fast); }
+.code-input::placeholder { color: var(--stale); letter-spacing: .2em; }
+.code-input:focus { outline: none; border-color: var(--brand); box-shadow: 0 0 0 4px color-mix(in srgb, var(--brand) 20%, transparent); }
+.confirm { width: 100%; min-height: 52px; font-size: 16px; }
 
-.end-trip-card { display: flex; flex-direction: column; gap: 12px; }
+/* position source */
+.pos-head { display: flex; align-items: center; justify-content: space-between; gap: 12px; }
+.pos-note { margin-top: 8px; font-size: 14px; color: var(--muted); }
+.switch { flex: none; display: inline-flex; align-items: center; gap: 8px; padding: 4px 12px 4px 4px; border: 1.5px solid var(--line); border-radius: 99px; background: var(--bg); font: 600 12px var(--font-body); transition: border-color var(--t-fast), background var(--t-med); }
+.knob { width: 22px; height: 22px; border-radius: 50%; background: var(--stale); transition: transform var(--t-med) var(--ease), background var(--t-med); }
+.switch.on { border-color: var(--signal); background: var(--warn-bg); }
+.switch.on .knob { background: var(--signal); transform: translateX(2px); }
+.manual { display: flex; flex-direction: column; }
+.manual-block { display: flex; flex-direction: column; gap: 10px; padding-top: 12px; border-top: 1px solid var(--line); }
+.advance { align-self: flex-start; }
+.coords { font: 500 12px var(--font-mono); color: var(--muted); }
+.coord-row { display: grid; grid-template-columns: 1fr 1fr; gap: 10px; }
+.reveal-enter-active, .reveal-leave-active { transition: opacity .2s ease, transform .25s var(--ease); }
+.reveal-enter-from, .reveal-leave-to { opacity: 0; transform: translateY(-6px); }
 
-/* Layover (auto-turnaround) */
-.layover-card { background: #FFFFFF; border: 0.5px solid rgba(0, 0, 0, 0.10); border-radius: 12px; padding: 24px; display: flex; flex-direction: column; gap: 14px; max-width: 480px; margin: 24px auto 0; width: 100%; box-sizing: border-box; }
-.layover-card h2 { font-size: 18px; font-weight: 500; margin: 0; }
-.layover-icon { width: 44px; height: 44px; border-radius: 999px; background: #FFF9E6; color: #BA7517; display: flex; align-items: center; justify-content: center; font-size: 22px; }
-.layover-route-name { color: #1D9E75; }
-.layover-bus-info { display: flex; align-items: center; gap: 12px; background: #F4F3EF; border-radius: 8px; padding: 10px 12px; }
-.van-muted { font-size: 13px; color: #5F5E5A; }
-.layover-actions { display: flex; flex-direction: column; gap: 8px; margin-top: 4px; }
-.layover-actions .btn { align-self: flex-start; }
+/* end shift */
+.end { flex-direction: row; align-items: center; justify-content: space-between; gap: 16px; flex-wrap: wrap; }
+.end > div { flex: 1; min-width: 180px; }
+.end .muted { margin-top: 8px; }
 
-/* Load-ahead manifest */
-.manifest-stops { margin-top: 12px; display: flex; flex-direction: column; gap: 3px; max-height: 220px; overflow-y: auto; }
-.manifest-row { display: flex; justify-content: space-between; align-items: center; gap: 10px; font-size: 12px; padding: 5px 8px; border-radius: 6px; background: #F4F3EF; }
-.manifest-row.manifest-passed { opacity: 0.45; }
-.manifest-name { color: #0D2137; font-weight: 500; }
-.manifest-counts { display: flex; gap: 4px; flex-wrap: wrap; }
-.count-chip { font-size: 10px; font-weight: 600; padding: 2px 8px; border-radius: 999px; white-space: nowrap; }
-.chip-board { background: #E1F5EE; color: #0F6E56; }
-.chip-wait { background: #FFF9E6; color: #BA7517; }
-.chip-off { background: #E7ECF2; color: #33475B; }
-.count-none { color: #B9B7B0; }
+/* layover */
+.layover { display: flex; flex-direction: column; gap: 16px; }
+.layover-ico { width: 48px; height: 48px; border-radius: 14px; display: grid; place-items: center; background: var(--signal); color: var(--on-signal); }
+.bus-info { display: flex; align-items: center; gap: 12px; padding-top: 4px; }
 
-.settings-panel { background: #FFFFFF; border: 0.5px solid rgba(0, 0, 0, 0.10); border-radius: 12px; padding: 16px; box-sizing: border-box; }
-.panel-header-label { font-size: 11px; font-weight: 500; text-transform: uppercase; color: #5F5E5A; padding-bottom: 6px; border-bottom: 0.5px solid rgba(0, 0, 0, 0.1); margin-bottom: 12px; }
-.password-form { display: flex; flex-direction: column; gap: 12px; }
-.field-group { display: flex; flex-direction: column; gap: 6px; }
-.field-group label { font-size: 12px; font-weight: 500; text-transform: uppercase; color: #5F5E5A; }
-.field-group input { height: 38px; border: 0.5px solid rgba(0, 0, 0, 0.2); border-radius: 8px; padding: 0 12px; font-size: 14px; background: #F4F3EF; color: #1A1A18; box-sizing: border-box; }
-.msg-success { color: #0F6E56; font-size: 12px; margin-top: 8px; }
-.msg-error { color: #D9383A; font-size: 12px; margin-top: 8px; }
-
-@media (min-width: 768px) {
-  .terminal-content { padding: 24px; gap: 20px; }
-  .trip-banner-card { flex-direction: row; align-items: center; justify-content: space-between; }
-  .panel-grid { display: grid; grid-template-columns: 1fr 1fr; }
-  .end-trip-card { flex-direction: row; align-items: center; justify-content: space-between; }
-}
-
-/* Manual vehicle position simulator */
-.manual-sim-card { margin-bottom: 16px; }
-.manual-sim-row { display: flex; align-items: center; gap: 10px; flex-wrap: wrap; }
-.manual-toggle {
-  background: #FFFFFF; border: 1px solid #5F5E5A; color: #5F5E5A;
-  font-size: 12px; font-weight: 500; padding: 6px 12px; border-radius: 6px;
-  cursor: pointer; transition: all 0.2s ease;
-}
-.manual-toggle:hover { background: #F4F3EF; }
-.manual-on { background: #BA7517; border-color: #BA7517; color: #FFFFFF; }
-.manual-sim-note { font-size: 11px; color: #5F5E5A; font-style: italic; }
-.manual-sim-body { margin-top: 12px; }
-.manual-stop-block { display: flex; flex-direction: column; gap: 6px; }
-.manual-label { font-size: 11px; text-transform: uppercase; color: #5F5E5A; letter-spacing: 0.04em; }
-.manual-select {
-  border: 0.5px solid rgba(0, 0, 0, 0.2); border-radius: 6px;
-  padding: 7px 9px; font-size: 13px; background: #FFFFFF; color: #0D2137;
-}
-.advance-btn {
-  align-self: flex-start; margin-top: 4px;
-  background: #0D2137; color: #FFFFFF; border: none;
-  font-size: 12px; font-weight: 500; padding: 7px 14px; border-radius: 6px; cursor: pointer;
-}
-.advance-btn:hover { background: #1B3A5C; }
-.manual-hint { font-size: 11px; color: #5F5E5A; font-family: monospace; margin: 2px 0 0; }
-.manual-coord-row { display: flex; gap: 8px; }
-.manual-input {
-  flex: 1; border: 0.5px solid rgba(0, 0, 0, 0.2); border-radius: 6px;
-  padding: 7px 9px; font-size: 13px; font-family: monospace; color: #0D2137;
+@media (min-width: 900px) {
+  .stage { padding: 28px 32px 40px; gap: 20px; }
+  .grid { grid-template-columns: minmax(0, 1.05fr) minmax(0, 1fr); gap: 20px; }
+  .col { gap: 20px; }
+  .hero { flex-direction: row; align-items: flex-end; justify-content: space-between; padding: 24px; }
+  .subbar { padding: 12px 32px; }
+  .broadcast { margin: 12px 32px 0; }
 }
 </style>

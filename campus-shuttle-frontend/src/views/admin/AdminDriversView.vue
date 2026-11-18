@@ -1,67 +1,50 @@
 <template>
   <div class="admin-page">
-    <!-- Onboard a new driver -->
-    <section class="panel-card">
-      <div class="panel-header-label">ONBOARD NEW DRIVER</div>
+    <header class="page-head rise">
+      <div>
+        <p class="eyebrow">People</p>
+        <h1>Drivers</h1>
+      </div>
+      <span class="chip chip-muted"><i></i><RollNumber :value="drivers.length" />&nbsp;onboarded</span>
+    </header>
 
-      <div v-if="formError" class="alert-banner danger-alert">{{ formError }}</div>
-      <div v-if="formSuccess" class="alert-banner success-alert">{{ formSuccess }}</div>
-
+    <section class="panel rise" style="--i:1">
+      <div class="panel-title"><UserPlus :size="18" /><h2>Onboard a driver</h2></div>
       <div class="form-grid">
-        <div class="form-group">
-          <label>Full Name</label>
-          <input v-model="form.name" placeholder="e.g. Malam Ibrahim Sani" class="text-input" />
-        </div>
-        <div class="form-group">
-          <label>Email Address</label>
-          <input v-model="form.email" type="email" placeholder="driver@abu.edu.ng" class="text-input" />
-        </div>
-        <div class="form-group">
-          <label>Temporary Password</label>
-          <input v-model="form.password" type="text" placeholder="Min 6 characters" class="text-input" />
-        </div>
-        <div class="form-group">
-          <label>License Number</label>
-          <input v-model="form.licenseNumber" placeholder="e.g. KD-DRV-88231" class="text-input" />
-        </div>
-        <div class="form-group">
-          <label>Phone Number</label>
-          <input v-model="form.phoneNumber" placeholder="e.g. 080X XXX XXXX" class="text-input" />
+        <label class="field"><span>Full name</span><input v-model="form.name" class="input" placeholder="e.g. Malam Ibrahim Sani" autocomplete="off" /></label>
+        <label class="field"><span>Email address</span><input v-model="form.email" class="input" type="email" placeholder="driver@abu.edu.ng" autocomplete="off" /></label>
+        <label class="field"><span>License number</span><input v-model="form.licenseNumber" class="input mono" placeholder="e.g. KD-DRV-88231" autocomplete="off" /></label>
+        <label class="field"><span>Phone number</span><input v-model="form.phoneNumber" class="input" type="tel" placeholder="e.g. 080X XXX XXXX" autocomplete="off" /></label>
+        <div class="field pw">
+          <label for="temp-pw">Temporary password</label>
+          <input id="temp-pw" v-model="form.password" class="input mono" type="text" placeholder="Min 6 characters" autocomplete="off" />
+          <PasswordFeedback :password="form.password" />
+          <span class="hint">Shown in plain text so you can pass it to the driver. They can change it from their Account sheet.</span>
         </div>
       </div>
-
-      <button class="btn btn-primary" :disabled="!canSubmit || saving" @click="onboardDriver">
-        {{ saving ? 'Provisioning...' : 'Onboard Driver' }}
-      </button>
+      <div class="form-actions">
+        <button class="btn" :disabled="!canSubmit || saving" @click="onboardDriver">
+          <Loader2 v-if="saving" :size="16" class="spin" />{{ saving ? 'Provisioning…' : 'Onboard driver' }}
+        </button>
+      </div>
     </section>
 
-    <!-- Driver roster -->
-    <section class="panel-card">
-      <div class="panel-header-label">DRIVER ROSTER</div>
+    <section class="panel rise" style="--i:2">
+      <div class="panel-title"><Users :size="18" /><h2>Driver roster</h2></div>
 
-      <div v-if="loading" class="loading-state">Loading driver roster...</div>
-      <div v-else-if="drivers.length === 0" class="empty-state">No drivers onboarded yet.</div>
+      <div v-if="loading" class="skeleton"></div>
+      <div v-else-if="drivers.length === 0" class="empty"><Users :size="22" /><p>No drivers onboarded yet.</p></div>
 
-      <div v-else class="table-scroll">
+      <div v-else class="table-wrap">
         <table class="data-table">
-          <thead>
-            <tr>
-              <th>Name</th>
-              <th>Email</th>
-              <th>License</th>
-              <th>Phone</th>
-              <th>Status</th>
-            </tr>
-          </thead>
+          <thead><tr><th>Name</th><th>Email</th><th>License</th><th>Phone</th><th>Status</th></tr></thead>
           <tbody>
             <tr v-for="d in drivers" :key="d._id">
-              <td>{{ d.userId?.name || '—' }}</td>
-              <td>{{ d.userId?.email || '—' }}</td>
-              <td class="mono-cell">{{ d.licenseNumber }}</td>
-              <td>{{ d.phoneNumber || '—' }}</td>
-              <td>
-                <span class="badge" :class="statusBadgeClass(d.status)">{{ formatStatus(d.status) }}</span>
-              </td>
+              <td data-label="Name" class="strong">{{ d.userId?.name || '—' }}</td>
+              <td data-label="Email">{{ d.userId?.email || '—' }}</td>
+              <td data-label="License" class="mono">{{ d.licenseNumber }}</td>
+              <td data-label="Phone" class="tnum">{{ d.phoneNumber || '—' }}</td>
+              <td data-label="Status"><span class="chip" :class="chipFor(d.status)"><i></i>{{ formatStatus(d.status) }}</span></td>
             </tr>
           </tbody>
         </table>
@@ -71,7 +54,11 @@
 </template>
 
 <script setup>
-import { ref, reactive, computed, onMounted } from 'vue';
+import { ref, reactive, computed, onMounted, watch } from 'vue';
+import { UserPlus, Users, Loader2 } from 'lucide-vue-next';
+import PasswordFeedback from '../../components/PasswordFeedback.vue';
+import RollNumber from '../../components/RollNumber.vue';
+import { useToast } from '../../composables/useToast';
 import apiClient from '../../api/axios';
 
 const drivers = ref([]);
@@ -128,40 +115,23 @@ const statusBadgeClass = (status) => {
 };
 
 onMounted(() => fetchDrivers(true));
+
+// Form errors and confirmations appear at the top of the page as toasts, not inside the card
+const toast = useToast();
+watch(formError, (message) => { if (message) toast.error(message); });
+watch(formSuccess, (message) => { if (message) toast.success(message); });
+
+const chipFor = (status) => {
+  if (status === 'on_trip') return 'chip-live';
+  if (status === 'available') return 'chip-ok';
+  return 'chip-muted';
+};
 </script>
 
 <style scoped>
-.admin-page { display: flex; flex-direction: column; gap: 16px; }
-.panel-card { background: #FFFFFF; border: 0.5px solid rgba(0, 0, 0, 0.10); border-radius: 12px; padding: 16px; box-sizing: border-box; }
-.panel-header-label { font-size: 11px; font-weight: 500; text-transform: uppercase; color: #5F5E5A; padding-bottom: 6px; border-bottom: 0.5px solid rgba(0, 0, 0, 0.1); margin-bottom: 12px; }
-.loading-state { font-size: 13px; color: #5F5E5A; text-align: center; padding: 24px 0; font-style: italic; }
-.empty-state { font-size: 13px; color: #5F5E5A; text-align: center; padding: 24px 0; }
-
-.form-grid { display: flex; flex-direction: column; gap: 12px; margin-bottom: 14px; }
-.form-group { display: flex; flex-direction: column; gap: 6px; }
-.form-group label { font-size: 12px; font-weight: 500; text-transform: uppercase; color: #5F5E5A; }
-.text-input { height: 38px; border: 0.5px solid rgba(0, 0, 0, 0.2); border-radius: 8px; padding: 0 12px; font-size: 13px; background: #F4F3EF; color: #1A1A18; box-sizing: border-box; }
-
-.alert-banner { font-size: 13px; padding: 10px 12px; border-radius: 8px; margin-bottom: 12px; }
-.danger-alert { background: #FDECEC; color: #D9383A; }
-.success-alert { background: #E1F5EE; color: #0F6E56; }
-
-.btn { display: inline-flex; align-items: center; justify-content: center; gap: 4px; height: 40px; border-radius: 8px; border: none; font-size: 13px; font-weight: 500; cursor: pointer; padding: 0 16px; }
-.btn:disabled { opacity: 0.55; cursor: not-allowed; }
-.btn-primary { background: #1D9E75; color: #FFFFFF; }
-
-.badge { font-size: 11px; font-weight: 500; padding: 2px 10px; border-radius: 999px; text-transform: capitalize; }
-.badge-active { background: #E1F5EE; color: #0F6E56; }
-.badge-available { background: #E8F1FB; color: #2563A8; }
-.badge-off { background: #F4F3EF; color: #5F5E5A; }
-
-.table-scroll { overflow-x: auto; }
-.data-table { width: 100%; border-collapse: collapse; font-size: 13px; }
-.data-table th { text-align: left; font-size: 11px; text-transform: uppercase; color: #5F5E5A; font-weight: 500; padding: 8px 10px; border-bottom: 0.5px solid rgba(0, 0, 0, 0.1); white-space: nowrap; }
-.data-table td { padding: 10px; border-bottom: 0.5px solid rgba(0, 0, 0, 0.06); color: #1A1A18; white-space: nowrap; }
-.mono-cell { font-family: monospace; letter-spacing: 0.05em; }
-
-@media (min-width: 768px) {
-  .form-grid { display: grid; grid-template-columns: repeat(2, 1fr); }
-}
+.pw { grid-column: 1 / -1; }
+@media (min-width: 720px) { .pw { grid-column: span 2; } }
+.hint { font-size: 12px; color: var(--muted); }
+.spin { animation: spin 1s linear infinite; }
+@keyframes spin { to { transform: rotate(360deg); } }
 </style>
